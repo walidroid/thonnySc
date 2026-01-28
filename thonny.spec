@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import os
 
 block_cipher = None
 
@@ -17,6 +18,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('thonny', 'thonny'),
+        ('local_plugins/thonnycontrib', 'thonnycontrib'),  # Include fixed plugins
     ] + friendly_datas + thonny_datas,
     hiddenimports=[
         'tkinter',
