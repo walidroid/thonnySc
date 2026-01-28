@@ -1,12 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 import os
 
 block_cipher = None
 
 # Collect friendly_traceback data files (locales)
 friendly_datas = collect_data_files('friendly_traceback')
-thonny_datas = collect_data_files('thonny')
+
+# Collect metadata for packages that query their version at runtime
+metadata_datas = []
+packages_with_metadata = [
+    'thonny',
+    'friendly_traceback',
+    'asttokens',
+    'jedi',
+    'pylint',
+    'mypy',
+    'docutils',
+    'Send2Trash',
+    'packaging',
+]
+
+for package in packages_with_metadata:
+    try:
+        metadata_datas += copy_metadata(package)
+    except Exception:
+        pass  # Package might not be installed
 
 # Collect all submodules
 friendly_hiddenimports = collect_submodules('friendly_traceback')
@@ -19,7 +38,7 @@ a = Analysis(
     datas=[
         ('thonny', 'thonny'),
         ('local_plugins/thonnycontrib', 'thonnycontrib'),  # Include fixed plugins
-    ] + friendly_datas + thonny_datas,
+    ] + friendly_datas + metadata_datas,
     hiddenimports=[
         'tkinter',
         'tkinter.ttk',

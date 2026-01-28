@@ -3,7 +3,7 @@
 
 #define MyAppName "ThonnySc"
 #define MyAppPublisher "ThonnySc Team"
-#define MyAppURL "https://github.com/yourusername/thonnysc"
+#define MyAppURL "https://github.com/walidroid/thonnysc"
 #define MyAppExeName "Thonny.exe"
 
 [Setup]
