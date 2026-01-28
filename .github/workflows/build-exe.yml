@@ -27,20 +27,75 @@ jobs:
         pip install pyinstaller
         pip install thonny-friendly thonny-tunisiaschools
         
+    - name: Create PyInstaller spec file
+      run: |
+        $specContent = @"
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['thonny/__main__.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('thonny', 'thonny'),
+    ],
+    hiddenimports=[
+        'tkinter',
+        'tkinter.ttk',
+        'tkinter.font',
+        'tkinter.messagebox',
+        'friendly_traceback',
+        'thonnycontrib.thonny_friendly',
+        'thonnycontrib.tunisiaschools',
+        'pkg_resources.py2_warn',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='Thonny',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='thonny/res/thonny.ico',
+)
+"@
+        $specContent | Out-File -Encoding utf8 thonny.spec
+        
     - name: Build EXE with PyInstaller
       run: |
-        pyinstaller --name="Thonny" `
-          --windowed `
-          --icon="thonny/res/thonny.ico" `
-          --add-data="thonny;thonny" `
-          --hidden-import=tkinter `
-          --hidden-import=friendly_traceback `
-          --hidden-import=thonnycontrib.thonny_friendly `
-          --hidden-import=thonnycontrib.tunisiaschools `
-          --collect-all friendly_traceback `
-          --collect-all thonny `
-          thonny/__main__.py
-          
+        pyinstaller thonny.spec
+        
+    - name: List dist directory
+      run: |
+        dir dist
+        
     - name: Upload EXE artifact
       uses: actions/upload-artifact@v4
       with:
