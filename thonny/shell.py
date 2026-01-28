@@ -100,6 +100,44 @@ ANSI_COLOR_NAMES = {
 }
 
 
+
+ERROR_TRANSLATIONS = {
+    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n’est pas définie",
+    r"SyntaxError: invalid syntax": r"SyntaxError : syntaxe invalide",
+    r"IndentationError: unexpected indent": r"IndentationError : indentation inattendue",
+    r"IndentationError: expected an indented block": r"IndentationError : un bloc indenté est attendu",
+    r"TypeError: (.*) takes (.*) positional argument but (.*) were given": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)",
+    r"TypeError: (.*) missing (.*) required positional arguments: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
+    r"ValueError: (.*)": r"ValueError : \1",
+    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors enterval",
+    r"KeyError: (.*)": r"KeyError : clé \1 introuvable",
+    r"ZeroDivisionError: division by zero": r"ZeroDivisionError : division par zéro",
+    r"ModuleNotFoundError: No module named '(.*)'": r"ModuleNotFoundError : Aucun module nommé « \1 »",
+    r"AttributeError: '(.*)' object has no attribute '(.*)'": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »",
+    r"FileNotFoundError: \[Errno 2\] No such file or directory: '(.*)'": r"FileNotFoundError : [Errno 2] Aucun fichier ou dossier de ce type : « \1 »",
+}
+
+def translate_error(text):
+    if not text:
+        return text
+    
+    # Process line by line to handle multi-line tracebacks correctly
+    lines = text.splitlines(keepends=True)
+    translated_lines = []
+    
+    for line in lines:
+        translated_line = line
+        for pattern, replacement in ERROR_TRANSLATIONS.items():
+            # Use regex substitution
+            new_line = re.sub(pattern, replacement, translated_line)
+            if new_line != translated_line:
+                translated_line = new_line
+                # Break after first match to avoid conflict (though usually one error per line)
+                break
+        translated_lines.append(translated_line)
+        
+    return "".join(translated_lines)
+
 @dataclass
 class ExecutionInfo:
     command_line: str
@@ -255,6 +293,7 @@ class ShellView(tk.PanedWindow):
                 self.text.see("end")
 
     def print_error(self, txt):
+        txt = translate_error(txt)
         was_scrolled_to_end = self.text.is_scrolled_to_end()
         self.text._insert_text_directly(txt, ("io", "stderr"))
         if was_scrolled_to_end:
@@ -289,12 +328,12 @@ class ShellView(tk.PanedWindow):
 
     def report_exception(self, prelude=None, conclusion=None):
         if prelude is not None:
-            self.text.direct_insert("end", prelude + "\n", ("stderr",))
+            self.text.direct_insert("end", translate_error(prelude + "\n"), ("stderr",))
 
-        self.text.direct_insert("end", traceback.format_exc() + "\n", ("stderr",))
+        self.text.direct_insert("end", translate_error(traceback.format_exc() + "\n"), ("stderr",))
 
         if conclusion is not None:
-            self.text.direct_insert("end", conclusion + "\n", ("stderr",))
+            self.text.direct_insert("end", translate_error(conclusion + "\n"), ("stderr",))
 
     def set_scrollbar(self, *args):
         self.vert_scrollbar.set(*args)
@@ -501,6 +540,8 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._discard_old_content()
 
         self._ensure_visible()
+        if msg.stream_name == "stderr":
+            msg.data = translate_error(msg.data)
         self._append_to_io_queue(msg.data, msg.stream_name)
 
         if not self._applied_io_events:
