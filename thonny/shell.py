@@ -118,6 +118,9 @@ ERROR_TRANSLATIONS = {
 }
 
 def translate_error(text):
+    return text
+    
+    # Translation logic disabled temporarily to debug backend crash
     if not text:
         return text
     
