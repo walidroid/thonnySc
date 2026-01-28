@@ -1,4 +1,4 @@
-name: Build Thonny EXE
+name: Build Thonny Installer
 
 on:
   push:
@@ -39,29 +39,45 @@ jobs:
         pip install pyinstaller
         pip install thonny-friendly thonny-tunisiaschools
         
+    - name: Download offline dependencies
+      run: |
+        mkdir wheels
+        pip download -r requirements.txt -d wheels
+        pip download thonny-friendly thonny-tunisiaschools -d wheels
+        pip download friendly-traceback -d wheels
+        
     - name: Build EXE with PyInstaller
       run: |
         pyinstaller thonny.spec
         
-    - name: Rename executable
+    - name: Install Inno Setup
       run: |
-        Move-Item -Path "dist/Thonny.exe" -Destination "dist/${{ steps.version.outputs.VERSION_FILE }}"
+        choco install innosetup -y
         
-    - name: List dist directory
+    - name: Compile installer with Inno Setup
       run: |
-        dir dist
+        $version = "${{ steps.version.outputs.VERSION }}"
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version installer.iss
         
-    - name: Upload EXE artifact
+    - name: Rename installer
+      run: |
+        Move-Item -Path "output\ThonnySc_v${{ steps.version.outputs.VERSION }}.exe" -Destination "output\${{ steps.version.outputs.VERSION_FILE }}"
+        
+    - name: List output directory
+      run: |
+        dir output
+        
+    - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ThonnySc-v${{ steps.version.outputs.VERSION }}
-        path: dist/${{ steps.version.outputs.VERSION_FILE }}
+        name: ThonnySc-Installer-v${{ steps.version.outputs.VERSION }}
+        path: output/${{ steps.version.outputs.VERSION_FILE }}
         retention-days: 30
         
     - name: Create Release (on tag)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/${{ steps.version.outputs.VERSION_FILE }}
+        files: output/${{ steps.version.outputs.VERSION_FILE }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
