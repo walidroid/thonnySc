@@ -296,7 +296,6 @@ class ShellView(tk.PanedWindow):
                 self.text.see("end")
 
     def print_error(self, txt):
-        txt = translate_error(txt)
         was_scrolled_to_end = self.text.is_scrolled_to_end()
         self.text._insert_text_directly(txt, ("io", "stderr"))
         if was_scrolled_to_end:
@@ -331,12 +330,12 @@ class ShellView(tk.PanedWindow):
 
     def report_exception(self, prelude=None, conclusion=None):
         if prelude is not None:
-            self.text.direct_insert("end", translate_error(prelude + "\n"), ("stderr",))
+            self.text.direct_insert("end", prelude + "\n", ("stderr",))
 
-        self.text.direct_insert("end", translate_error(traceback.format_exc() + "\n"), ("stderr",))
+        self.text.direct_insert("end", traceback.format_exc() + "\n", ("stderr",))
 
         if conclusion is not None:
-            self.text.direct_insert("end", translate_error(conclusion + "\n"), ("stderr",))
+            self.text.direct_insert("end", conclusion + "\n", ("stderr",))
 
     def set_scrollbar(self, *args):
         self.vert_scrollbar.set(*args)
@@ -543,8 +542,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._discard_old_content()
 
         self._ensure_visible()
-        if msg.stream_name == "stderr":
-            msg.data = translate_error(msg.data)
         self._append_to_io_queue(msg.data, msg.stream_name)
 
         if not self._applied_io_events:
