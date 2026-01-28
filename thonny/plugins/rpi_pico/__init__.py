@@ -1,6 +1,9 @@
 from logging import getLogger
 
-from minny.target import RAW_PASTE_SUBMIT_MODE
+try:
+    from minny.target import RAW_PASTE_SUBMIT_MODE
+except ImportError:
+    RAW_PASTE_SUBMIT_MODE = None
 from typing import Optional
 
 from thonny import get_workbench, ui_utils
@@ -33,6 +36,8 @@ class RaspberryPiPicoBackendConfigPage(RP2040BackendConfigPage):
 
 
 def load_plugin():
+    if RAW_PASTE_SUBMIT_MODE is None:
+        return
     add_micropython_backend(
         "RPiPico",
         RaspberryPiPicoBackendProxy,

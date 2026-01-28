@@ -166,3 +166,11 @@ def init():
     get_workbench().set_default("assistance.open_assistant_on_errors", True)
     get_workbench().set_default("assistance.open_assistant_on_warnings", False)
     get_workbench().set_default("assistance.disabled_checks", [])
+    
+    # Install friendly-traceback with French language for error messages
+    try:
+        import friendly_traceback
+        friendly_traceback.install(lang="fr")
+    except ImportError:
+        pass
+

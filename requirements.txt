@@ -4,3 +4,6 @@ mypy>=1.0.1
 asttokens>=2.2.1
 Send2Trash>=1.8.0
 packaging>=23.0
+thonny-friendly
+thonny-palestine-flag
+thonny-tunisiaschools
