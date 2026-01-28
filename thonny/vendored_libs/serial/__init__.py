@@ -23,16 +23,7 @@ VERSION = __version__
 if sys.platform == 'cli':
     from serial.serialcli import Serial
 else:
-    import os
-    # chose an implementation, depending on os
-    if os.name == 'nt':  # sys.platform == 'win32':
-        from serial.serialwin32 import Serial
-    elif os.name == 'posix':
-        from serial.serialposix import Serial, PosixPollSerial, VTIMESerial  # noqa
-    elif os.name == 'java':
-        from serial.serialjava import Serial
-    else:
-        raise ImportError("Sorry: no implementation for your platform ('{}') available".format(os.name))
+    from serial.serialwin32 import Serial
 
 
 protocol_handler_packages = [

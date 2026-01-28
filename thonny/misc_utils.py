@@ -80,26 +80,19 @@ def delete_dir_try_hard(path: str, hardness: int = 5) -> None:
 
 
 def running_on_windows() -> bool:
-    return sys.platform == "win32"
+    return True
 
 
 def running_on_mac_os() -> bool:
-    return sys.platform == "darwin"
+    return False
 
 
 def running_on_linux() -> bool:
-    return sys.platform == "linux"
+    return False
 
 
 def running_on_rpi() -> bool:
-    machine_lower = platform.uname().machine.lower()
-    return running_on_linux() and (
-        # not great heuristics, I know
-        machine_lower.startswith("arm")
-        or machine_lower.startswith("aarch64")
-        or os.environ.get("DESKTOP_SESSION") == "LXDE-pi"
-        or os.environ.get("DESKTOP_SESSION") == "LXDE-pi-wayfire"
-    )
+    return False
 
 
 def get_user_site_packages_dir_for_base(userbase: str) -> str:
@@ -143,26 +136,8 @@ def list_volumes(skip_letters=set()) -> Sequence[str]:
             return volumes
         finally:
             ctypes.windll.kernel32.SetErrorMode(old_mode)  # @UndefinedVariable
-    if sys.platform == "linux":
-        try:
-            from dbus_next.errors import DBusError
-        except ImportError:
-            logger.info("Could not import dbus_next, falling back to mount command")
-            return list_volumes_with_mount_command()
-
-        from thonny.udisks import list_volumes_sync
-
-        try:
-            return list_volumes_sync()
-        except DBusError as error:
-            if "org.freedesktop.DBus.Error.ServiceUnknown" not in error.text:
-                raise
-            # Fallback to using the 'mount' command on Linux if the Udisks D-Bus service is unavailable.
-            return list_volumes_with_mount_command()
     else:
-        # 'posix' means we're on *BSD or OSX (Mac).
-        # Call the unix "mount" command to list the mounted volumes.
-        return list_volumes_with_mount_command()
+        return []
 
 
 def list_volumes_with_mount_command() -> Sequence[str]:
@@ -423,30 +398,6 @@ def lap_time(text=""):
 def copy_to_clipboard(data):
     if running_on_windows():
         _copy_to_windows_clipboard(data)
-    elif running_on_mac_os():
-        command = ["pbcopy"]
-    else:
-        command = ["xsel", "-b", "-i"]
-
-    env = dict(os.environ).copy()
-    encoding = "utf-8"
-    env["PYTHONIOENCODING"] = encoding
-
-    if sys.version_info >= (3, 6):
-        extra = {"encoding": encoding}
-    else:
-        extra = {}
-
-    proc = subprocess.Popen(
-        command,
-        stdin=subprocess.PIPE,
-        shell=False,
-        env=env,
-        universal_newlines=True,
-        close_fds=True,
-        **extra,
-    )
-    proc.communicate(input=data, timeout=0.1)
 
 
 def _copy_to_windows_clipboard(data):
@@ -516,29 +467,15 @@ class PopenWithOutputQueues(subprocess.Popen):
 
 
 def inside_flatpak():
-    import shutil
-
-    return shutil.which("flatpak-spawn") and os.path.isfile("/app/manifest.json")
+    return False
 
 
 def show_command_not_available_in_flatpak_message():
-    from tkinter import messagebox
-
-    from thonny import get_workbench
-    from thonny.languages import tr
-
-    messagebox.showinfo(
-        tr("Command not available"),
-        tr("This command is not available if Thonny is run via Flatpak"),
-        parent=get_workbench(),
-    )
+    pass
 
 
 def get_menu_char():
-    if running_on_windows():
-        return "≡"  # Identical to
-    else:
-        return "☰"  # Trigram for heaven, too heavy on Windows
+    return "≡"
 
 
 def download_bytes(url: str, timeout: int = 10) -> bytes:
@@ -608,23 +545,7 @@ def get_and_parse_json(url: str, headers: Dict[str, Any] = {}, timeout: int = 10
 def get_os_level_favorite_folders() -> List[str]:
     if running_on_windows():
         raise NotImplementedError()
-
-    result = []
-    for name in [".", "Desktop", "Documents", "Downloads"]:
-        path = os.path.realpath(os.path.expanduser(f"~/{name}"))
-        if os.path.isdir(path):
-            result.append(path)
-
-    gtk_favorites_path = os.path.expanduser("~/.config/gtk-3.0/bookmarks")
-    if running_on_linux() and os.path.isfile(gtk_favorites_path):
-        with open(gtk_favorites_path, "rt", encoding="utf-8") as fp:
-            for line in fp:
-                if line.startswith("file:///"):
-                    path = line[7:].strip()
-                    if os.path.isdir(path) and path not in result:
-                        result.append(path)
-
-    return result
+    return []
 
 
 def format_date_and_time_compact(
