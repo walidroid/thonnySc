@@ -15,11 +15,7 @@ class AssistantConfigPage(ConfigurationPage):
     def __init__(self, master):
         super().__init__(master)
 
-        add_option_checkbox(
-            self,
-            "assistance.open_assistant_on_errors",
-            tr("Open Assistant automatically when program crashes with an exception"),
-        )
+
 
         add_option_checkbox(
             self,

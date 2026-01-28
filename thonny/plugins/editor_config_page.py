@@ -40,11 +40,7 @@ class EditorConfigurationPage(ConfigurationPage):
             tr("Automatically show parameter info after typing '('"),
         )
 
-        add_option_checkbox(
-            self,
-            "edit.automatic_completions",
-            tr("Automatically propose completions while typing"),
-        )
+
         add_option_checkbox(
             self,
             "edit.automatic_completion_details",
