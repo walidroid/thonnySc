@@ -1,6 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
+
+# Collect friendly_traceback data files (locales)
+friendly_datas = collect_data_files('friendly_traceback')
+thonny_datas = collect_data_files('thonny')
+
+# Collect all submodules
+friendly_hiddenimports = collect_submodules('friendly_traceback')
+thonny_hiddenimports = collect_submodules('thonny')
 
 a = Analysis(
     ['thonny/__main__.py'],
@@ -8,7 +17,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('thonny', 'thonny'),
-    ],
+    ] + friendly_datas + thonny_datas,
     hiddenimports=[
         'tkinter',
         'tkinter.ttk',
@@ -18,7 +27,7 @@ a = Analysis(
         'thonnycontrib.thonny_friendly',
         'thonnycontrib.tunisiaschools',
         'pkg_resources.py2_warn',
-    ],
+    ] + friendly_hiddenimports + thonny_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
