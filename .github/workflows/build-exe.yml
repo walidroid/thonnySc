@@ -38,6 +38,7 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         pip install friendly-traceback
+        pip install .
         
     - name: Download offline dependencies
       run: |
