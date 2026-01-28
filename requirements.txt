@@ -7,3 +7,4 @@ packaging>=23.0
 thonny-friendly
 thonny-palestine-flag
 thonny-tunisiaschools
+friendly-traceback>=2.0.0

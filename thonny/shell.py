@@ -102,44 +102,63 @@ ANSI_COLOR_NAMES = {
 
 
 ERROR_TRANSLATIONS = {
-    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n’est pas définie",
+    # NameError
+    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n'est pas définie",
+    
+    # SyntaxError
     r"SyntaxError: invalid syntax": r"SyntaxError : syntaxe invalide",
+    r"SyntaxError: expected ':'": r"SyntaxError : « : » attendu",
+    r"SyntaxError: unterminated string literal \(detected at line (\d+)\)": r"SyntaxError : chaîne de caractères non terminée (détectée à la ligne \1)",
+    r"SyntaxError: EOL while scanning string literal": r"SyntaxError : fin de ligne lors de l'analyse d'une chaîne de caractères",
+    r"SyntaxError: unexpected EOF while parsing": r"SyntaxError : fin de fichier inattendue lors de l'analyse",
+    
+    # IndentationError
     r"IndentationError: unexpected indent": r"IndentationError : indentation inattendue",
     r"IndentationError: expected an indented block": r"IndentationError : un bloc indenté est attendu",
+    r"IndentationError: expected an indented block after '(.*)' statement on line (\d+)": r"IndentationError : un bloc indenté est attendu après l'instruction « \1 » à la ligne \2",
+    r"IndentationError: unindent does not match any outer indentation level": r"IndentationError : la désindentation ne correspond à aucun niveau d'indentation externe",
+    
+    # TypeError
     r"TypeError: (.*) takes (.*) positional argument but (.*) were given": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)",
-    r"TypeError: (.*) missing (.*) required positional arguments: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
+    r"TypeError: (.*) missing (.*) required positional arguments?: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
+    r"TypeError: can only concatenate str \(not \"(.*)\"\) to str": r"TypeError : on ne peut concaténer que des chaînes (pas « \1 ») avec des chaînes",
+    r"TypeError: unsupported operand type\(s\) for (.*): '(.*)' and '(.*)'": r"TypeError : type(s) d'opérande non supporté(s) pour \1 : « \2 » et « \3 »",
+    
+    # ValueError
     r"ValueError: (.*)": r"ValueError : \1",
-    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors enterval",
+    
+    # IndexError
+    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors intervalle",
+    
+    # KeyError
     r"KeyError: (.*)": r"KeyError : clé \1 introuvable",
+    
+    # ZeroDivisionError
     r"ZeroDivisionError: division by zero": r"ZeroDivisionError : division par zéro",
+    r"ZeroDivisionError: integer division or modulo by zero": r"ZeroDivisionError : division entière ou modulo par zéro",
+    
+    # ModuleNotFoundError / ImportError
     r"ModuleNotFoundError: No module named '(.*)'": r"ModuleNotFoundError : Aucun module nommé « \1 »",
+    r"ImportError: cannot import name '(.*)' from '(.*)'": r"ImportError : impossible d'importer « \1 » depuis « \2 »",
+    
+    # AttributeError
     r"AttributeError: '(.*)' object has no attribute '(.*)'": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »",
+    
+    # FileNotFoundError
     r"FileNotFoundError: \[Errno 2\] No such file or directory: '(.*)'": r"FileNotFoundError : [Errno 2] Aucun fichier ou dossier de ce type : « \1 »",
+    
+    # RecursionError
+    r"RecursionError: maximum recursion depth exceeded": r"RecursionError : profondeur de récursion maximale dépassée",
 }
 
 def translate_error(text):
-    return text
-    
-    # Translation logic disabled temporarily to debug backend crash
+    """Translate error messages to French."""
     if not text:
         return text
     
-    # Process line by line to handle multi-line tracebacks correctly
-    lines = text.splitlines(keepends=True)
-    translated_lines = []
-    
-    for line in lines:
-        translated_line = line
-        for pattern, replacement in ERROR_TRANSLATIONS.items():
-            # Use regex substitution
-            new_line = re.sub(pattern, replacement, translated_line)
-            if new_line != translated_line:
-                translated_line = new_line
-                # Break after first match to avoid conflict (though usually one error per line)
-                break
-        translated_lines.append(translated_line)
-        
-    return "".join(translated_lines)
+    for pattern, replacement in ERROR_TRANSLATIONS.items():
+        text = re.sub(pattern, replacement, text)
+    return text
 
 @dataclass
 class ExecutionInfo:
@@ -1595,6 +1614,8 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def _show_user_exception(self, user_exception):
         for line, frame_id, *_ in user_exception["items"]:
+            # Translate error messages to French
+            line = translate_error(line)
             tags = ("io", "stderr")
             if frame_id is not None:
                 frame_tag = "frame_%d" % frame_id
