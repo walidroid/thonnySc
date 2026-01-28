@@ -37,30 +37,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pyinstaller
-        pip install thonny-friendly thonny-tunisiaschools
-        
-    - name: Apply plugin fixes
-      run: |
-        $pluginPath = python -c "import site; print(site.getsitepackages()[0])"
-        $friendlyFile = Join-Path $pluginPath "thonnycontrib\thonny_friendly\__init__.py"
-        $tunisiaFile = Join-Path $pluginPath "thonnycontrib\tunisiaschools\__init__.py"
-        
-        # Fix thonny-friendly import
-        (Get-Content $friendlyFile) -replace 'from thonny.assistance import ProgramAnalyzer', 'from thonny.program_analysis import ProgramAnalyzer' | Set-Content $friendlyFile
-        (Get-Content $friendlyFile) -replace 'friendly_traceback.install\(\)', 'friendly_traceback.install(lang="fr")' | Set-Content $friendlyFile
-        
-        # Fix thonny-tunisiaschools menu names
-        (Get-Content $tunisiaFile) -replace '"PyQt5"', '"pyqt5"' | Set-Content $tunisiaFile
-        
-        # Copy fixed plugins to local_plugins
-        mkdir -p local_plugins
-        xcopy /E /I /Y (Join-Path $pluginPath "thonnycontrib") "local_plugins\thonnycontrib"
+        pip install friendly-traceback
         
     - name: Download offline dependencies
       run: |
         mkdir wheels
         pip download -r requirements.txt -d wheels
-        pip download thonny-friendly thonny-tunisiaschools -d wheels
         pip download friendly-traceback -d wheels
         
     - name: Build EXE with PyInstaller
