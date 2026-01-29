@@ -52,7 +52,7 @@ OutputBaseFilename={#InstallerPrefix}-{#AppVer}
 Compression=lzma2/ultra
 SolidCompression=yes
 
-LicenseFile=license-for-win-installer.txt
+LicenseFile=..\..\license-for-win-installer.txt
 WizardImageFile=screenshot_with_logo_semidark.bmp
 WizardSmallImageFile=small_logo.bmp 
 ChangesAssociations=yes

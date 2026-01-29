@@ -109,7 +109,7 @@ def load_plugin():
     get_workbench().add_view(UiViewerPlugin, tr("QT UI Viewer"), "s")
     
     
-    image_path = os.path.join(os.path.dirname(__file__), "res", "qt_16.png")
+    image_path = os.path.join(os.path.dirname(__file__), "res", "qt_32.png")
     designer_image_path = os.path.join(os.path.dirname(__file__), "res", "designer_16.png")
 	
     get_workbench().add_command(

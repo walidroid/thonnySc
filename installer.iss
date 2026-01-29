@@ -25,6 +25,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 SetupIconFile=thonny\res\thonny.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
+LicenseFile=license-for-win-installer.txt
 
 [Languages]
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"

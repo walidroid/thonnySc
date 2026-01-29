@@ -47,6 +47,8 @@ a = Analysis(
         'friendly_traceback',
         'thonnycontrib.thonny_friendly',
         'thonnycontrib.tunisiaschools',
+        'thonnycontrib.thonny_simple_autocomplete',
+        'thonnycontrib.thonny_quick_switch',
         'pkg_resources.py2_warn',
     ] + friendly_hiddenimports + thonny_hiddenimports,
     hookspath=[],

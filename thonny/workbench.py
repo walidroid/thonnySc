@@ -627,6 +627,12 @@ class Workbench(tk.Tk):
         # 3rd party plugins from namespace package
         # Now it's time to add plugins dir to sys path
         sys.path.append(thonny.get_sys_path_directory_containg_plugins())
+        
+        # Also add local_plugins folder if it exists (for bundled plugins)
+        local_plugins_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "local_plugins")
+        if os.path.isdir(local_plugins_dir) and local_plugins_dir not in sys.path:
+            sys.path.insert(0, local_plugins_dir)
+        
         try:
             import thonnycontrib  # @UnresolvedImport
         except ImportError:
