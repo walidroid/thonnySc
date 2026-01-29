@@ -3,8 +3,14 @@ from logging import getLogger
 import os
 import sys
 from abc import ABC
-from minny.common import ManagementError
-from minny.os_target import LocalOsTargetManager
+
+try:
+    from minny.common import ManagementError
+    from minny.os_target import LocalOsTargetManager
+except ImportError:
+    ManagementError = Exception
+    LocalOsTargetManager = None
+
 from typing import Any, Dict
 
 # make sure thonny folder is in sys.path (relevant in dev)

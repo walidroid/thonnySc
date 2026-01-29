@@ -5,9 +5,16 @@ from logging import getLogger
 from textwrap import dedent
 from typing import Any, BinaryIO, Callable, Dict, Optional
 
-from minny.bare_metal_target import BareMetalTargetManager
-from minny.connection import MicroPythonConnection
-from minny.target import ManagementError
+try:
+    from minny.bare_metal_target import BareMetalTargetManager
+    from minny.connection import MicroPythonConnection
+    from minny.target import ManagementError
+    MINNY_AVAILABLE = True
+except ImportError:
+    BareMetalTargetManager = None
+    MicroPythonConnection = None
+    ManagementError = Exception
+    MINNY_AVAILABLE = False
 
 # make sure thonny folder is in sys.path (relevant in dev)
 thonny_container = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -213,11 +220,19 @@ def launch_bare_metal_backend(backend_class: Callable[..., BareMetalMicroPythonB
             print("\nPort not defined", file=sys.stderr)
             sys.exit(ALL_EXPLAINED_STATUS_CODE)
         elif args["port"] == "webrepl":
-            from minny.webrepl_connection import WebReplConnection
+            try:
+                from minny.webrepl_connection import WebReplConnection
+            except ImportError:
+                print("\nminny package not available. Cannot use WebREPL connection.", file=sys.stderr)
+                sys.exit(ALL_EXPLAINED_STATUS_CODE)
 
             connection = WebReplConnection(args["url"], args["password"])
         else:
-            from minny.serial_connection import SerialConnection
+            try:
+                from minny.serial_connection import SerialConnection
+            except ImportError:
+                print("\nminny package not available. Cannot use Serial connection.", file=sys.stderr)
+                sys.exit(ALL_EXPLAINED_STATUS_CODE)
 
             connection = SerialConnection(
                 args["port"], BAUDRATE, dtr=args.get("dtr"), rts=args.get("rts")

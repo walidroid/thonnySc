@@ -41,16 +41,27 @@ from logging import getLogger
 from textwrap import dedent
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
-from minny.target import (
-    EOT,
-    FIRST_RAW_PROMPT,
-    NORMAL_PROMPT,
-    STAT_KIND_INDEX,
-    STAT_MTIME_INDEX,
-    STAT_SIZE_INDEX,
-    ProperTargetManager,
-    unix_dirname_basename,
-)
+try:
+    from minny.target import (
+        EOT,
+        FIRST_RAW_PROMPT,
+        NORMAL_PROMPT,
+        STAT_KIND_INDEX,
+        STAT_MTIME_INDEX,
+        STAT_SIZE_INDEX,
+        ProperTargetManager,
+        unix_dirname_basename,
+    )
+except ImportError:
+    EOT = b'\x04'
+    FIRST_RAW_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
+    NORMAL_PROMPT = b">>> "
+    STAT_KIND_INDEX = 0
+    STAT_MTIME_INDEX = 8
+    STAT_SIZE_INDEX = 6
+    ProperTargetManager = None
+    def unix_dirname_basename(path):
+        return os.path.split(path)
 
 from thonny import report_time
 from thonny.backend import MainBackend
