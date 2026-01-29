@@ -74,10 +74,35 @@ jobs:
         path: output/${{ steps.version.outputs.VERSION_FILE }}
         retention-days: 30
         
-    - name: Create Release (on tag)
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+    - name: Create Release
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      uses: softprops/action-gh-release@v2
       with:
+        tag_name: v${{ steps.version.outputs.VERSION }}
+        name: ThonnySc v${{ steps.version.outputs.VERSION }}
+        body: |
+          ## ThonnySc Installer
+          
+          **Version:** ${{ steps.version.outputs.VERSION }}
+          **Build Date:** ${{ github.event.head_commit.timestamp }}
+          **Commit:** ${{ github.sha }}
+          
+          ### Changes
+          ${{ github.event.head_commit.message }}
+          
+          ### Installation
+          1. Download `${{ steps.version.outputs.VERSION_FILE }}` below
+          2. Run the installer
+          3. Desktop shortcuts for ThonnySc and Qt Designer will be created automatically
+          
+          ### Features
+          - ✅ Automatic desktop shortcuts for ThonnySc
+          - ✅ Automatic desktop shortcuts for Qt Designer (if bundled)
+          - ✅ French and English language support
+          - ✅ All dependencies included
         files: output/${{ steps.version.outputs.VERSION_FILE }}
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
