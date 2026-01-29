@@ -1029,7 +1029,7 @@ def load_plugin() -> None:
         "tools",
         tr("Open replayer..."),
         open_replayer,
-        include_in_toolbar=not get_workbench().in_simple_mode(),
+        include_in_toolbar=False,
         image="clock",
         caption="Replayer",
         group=105,

@@ -937,7 +937,7 @@ class Workbench(tk.Tk):
             self._support_ukraine,
             image="Ukraine",
             caption=tr("Support"),
-            include_in_toolbar=True,
+            include_in_toolbar=False,
             group=101,
         )
 
@@ -2067,13 +2067,11 @@ class Workbench(tk.Tk):
         treeview_rowheight = self._compute_treeview_rowheight()
         threshold = self.get_option("general.large_icon_rowheight_threshold")
         if (
-            treeview_rowheight > threshold
+            for_toolbar  # Always use larger images for toolbar buttons
+            and not filename.endswith("48.png")
+            or treeview_rowheight > threshold
             and not filename.endswith("48.png")
             or treeview_rowheight > threshold * 1.5
-            or self.in_simple_mode()
-            and for_toolbar
-            and not filename.endswith("48.png")
-            and self.winfo_screenwidth() >= 1280
         ):
             scaled_filename = filename[:-4] + "_2x.png"
             scaled_filename_alt = filename[:-4] + "48.png"  # used in pi theme
