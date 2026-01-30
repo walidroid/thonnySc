@@ -98,9 +98,8 @@ Source: "{#SourceFolder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 [Icons]
 ; Start Menu shortcut
 Name: "{group}\Thonny"; Filename: "{app}\thonny.exe"; IconFilename: "{app}\thonny.exe"
-; Desktop shortcuts - created automatically
+; Desktop shortcut - created automatically
 Name: "{autodesktop}\Thonny"; Filename: "{app}\thonny.exe"; IconFilename: "{app}\thonny.exe"
-Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"; WorkingDir: "{app}"; Check: FileExists(ExpandConstant('{app}\Lib\site-packages\qt5_applications\Qt\bin\designer.exe'))
 
 
 [Registry]
