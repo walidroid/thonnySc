@@ -76,32 +76,48 @@ jobs:
         
     - name: Download Qt Designer
       run: |
-        Write-Host "Downloading Qt Designer standalone..."
+        Write-Host "Attempting to download Qt Designer..."
         
-        # Option 1: Direct download (if you have a stable URL)
-        # Invoke-WebRequest "https://github.com/fman-users/Qt-Designer-Standalone/releases/download/v5.15.2/qt-designer-standalone-5.15.2-win.zip" -Out "qt-designer.zip"
+        # For CI builds, Qt Designer needs to be pre-uploaded to GitHub Releases
+        # Check if we can download from releases
+        $qtDesignerUrl = "https://github.com/walidroid/thonnysc/releases/download/qt-designer/qt-designer.zip"
         
-        # Option 2: Use cached version or install from PyQt5-tools
-        Write-Host "Installing PyQt5-tools to get Qt Designer..."
-        pip install pyqt5-tools
-        
-        # Find Qt Designer location
-        $pyqt5Path = python -c "import PyQt5; import os; print(os.path.dirname(PyQt5.__file__))"
-        $designerSrc = Join-Path $pyqt5Path "Qt\bin"
-        
-        Write-Host "Copying Qt Designer from: $designerSrc"
-        
-        # Copy to Qt Designer folder
-        New-Item -Path "Qt Designer" -ItemType Directory -Force
-        Copy-Item -Path "$designerSrc\*" -Destination "Qt Designer" -Recurse -Force
-        
-        Write-Host "Qt Designer copied successfully"
-        if (Test-Path "Qt Designer\designer.exe") {
-          Write-Host "✓ designer.exe found"
-        } else {
-          Write-Host "✗ designer.exe not found!"
+        try {
+          Write-Host "Downloading Qt Designer from releases..."
+          Invoke-WebRequest $qtDesignerUrl -Out "qt-designer.zip" -ErrorAction SilentlyContinue
+          
+          if (Test-Path "qt-designer.zip") {
+            Write-Host "Extracting Qt Designer..."
+            Expand-Archive "qt-designer.zip" -DestinationPath "." -Force
+            Remove-Item "qt-designer.zip"
+            
+            if (Test-Path "Qt Designer\designer.exe") {
+              Write-Host "✓ Qt Designer downloaded and extracted successfully"
+            } else {
+              Write-Host "✗ designer.exe not found after extraction"
+            }
+          }
+        } catch {
+          Write-Host "Qt Designer download failed (this is expected for first build)"
+          Write-Host "Creating empty Qt Designer folder as placeholder..."
+          New-Item -Path "Qt Designer" -ItemType Directory -Force | Out-Null
+          
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "IMPORTANT: Qt Designer Not Included in CI Build"
+          Write-Host "=========================================="
+          Write-Host "To include Qt Designer in automated builds:"
+          Write-Host "1. On your local machine, zip the 'Qt Designer' folder"
+          Write-Host "2. Create a GitHub release tag 'qt-designer'"
+          Write-Host "3. Upload qt-designer.zip to that release"
+          Write-Host "4. Future CI builds will download it automatically"
+          Write-Host ""
+          Write-Host "Local builds will include Qt Designer normally."
+          Write-Host "=========================================="
         }
         
+
+
 
 
     - name: Build EXE with PyInstaller
