@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from datetime import date
 from thonny import get_workbench
 from thonny.languages import tr
@@ -60,49 +61,82 @@ def add_pyqt_code():
             btnstxt+'\n'
             'app.exec_()'
             )
+def find_qt_designer():
+    """Find Qt Designer executable in common locations."""
+    import shutil
+    
+    # Check for bundled version first (if running as frozen app)
+    if getattr(sys, 'frozen', False):
+        app_dir = os.path.dirname(sys.executable)
+        bundled_designer = os.path.join(app_dir, "Qt Designer", "designer.exe")
+        if os.path.isfile(bundled_designer):
+            return bundled_designer
+    
+    # Try common install locations
+    locations = [
+        "C:\\Program Files (x86)\\Qt Designer\\designer.exe",
+        "C:\\Program Files\\Qt Designer\\designer.exe",
+    ]
+    
+    for loc in locations:
+        if os.path.isfile(loc):
+            return loc
+    
+    # Check PATH using shutil.which
+    designer_qt5 = shutil.which("pyqt5_qt5_designer.exe")
+    if designer_qt5:
+        return designer_qt5
+    
+    designer_in_path = shutil.which("designer.exe")
+    if designer_in_path:
+        return designer_in_path
+    
+    return None
+
 def open_in_designer():
     """
-        Opens a file with a specified program.
-
-        Args:
-        - file_path: Path to the file to be opened.
-        - program_locations: List of paths where the program can be found.
-
-        Returns:
-        - True if the file was successfully opened with the program, False otherwise.
-        """
-    #program should use most of the known qt designer locations
-    #@TODO : improve designer  dir discovery
-    program_locations = [ "pyqt5_qt5_designer.exe",#selmen designer bundle
-                         
-                          #fmain.io designer bundle 
-                          "C:\\Program Files (x86)\\Qt Designer\\designer.exe"
-                          "C:\\Program Files\\Qt Designer\\designer.exe"
-                          "designer.exe",#any designer.exe in path env var
-                          #fallback : thonny own python runner with qt5 bins
-                          #os.path.join(get_thonny_user_dir() , "qt5_applications\\Qt\\bin\\designer.exe")
-                          
-                          ] 
-
+    Opens Qt Designer with the current UI file.
+    Shows error messages if Qt Designer is not found.
+    """
+    designer_exe = find_qt_designer()
+    
+    if not designer_exe:
+        try:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Qt Designer non trouvé",
+                "Qt Designer n'a pas été trouvé sur cet ordinateur.\n\n"
+                "Pour installer Qt Designer:\n"
+                "1. Ouvrez le terminal (cmd)\n"
+                "2. Exécutez: pip install pyqt5-tools\n\n"
+                "Ou téléchargez depuis:\n"
+                "https://build-system.fman.io/qt-designer-download"
+            )
+        except:
+            print("✗ Erreur: Qt Designer n'a pas été trouvé.")
+            print("  Veuillez installer: pip install pyqt5-tools")
+        return False
+    
     global qt_ui_file
-    for location in program_locations:
-
-        
-        
-        if os.path.exists(location) or location== "pyqt5_qt5_designer.exe" or location== "designer.exe" :
-            try:
-                print("running ", f'"{location}" "{qt_ui_file}"', " ...")
-                if qt_ui_file=="":
-                    #os.system(f'"{location}"')
-                    subprocess.Popen ([f"{location}"])
-                else:
-                    subprocess.Popen ([f"{location}" ,f"{qt_ui_file}"])
-                    #os.system(f'"{location}" "{qt_ui_file}"')
-            except Exception as e:
-                print(f"Error: {e}")
+    try:
+        if qt_ui_file:
+            subprocess.Popen([designer_exe, qt_ui_file])
+            print(f"✓ Ouvert {qt_ui_file} dans Qt Designer")
+        else:
+            subprocess.Popen([designer_exe])
+            print(f"✓ Qt Designer lancé")
         return True
-    print("Error: Designer not found.")
-    return False
+    except Exception as e:
+        try:
+            from tkinter import messagebox
+            messagebox.showerror(
+                "Erreur",
+                f"Erreur lors du lancement de Qt Designer:\n{e}"
+            )
+        except:
+            print(f"✗ Erreur lors du lancement de Qt Designer: {e}")
+        return False
+
 
 
 def load_plugin():
