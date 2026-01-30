@@ -35,7 +35,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; Desktop icons are now created automatically - no task needed
 
 [Files]
-Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\Thonny\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
