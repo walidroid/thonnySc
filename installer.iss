@@ -37,7 +37,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "dist\Thonny\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "Python\*"; DestDir: "{app}\Python"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Conditionally include Qt Designer if it exists (for local builds and CI with Qt Designer uploaded)
+#ifexist "Qt Designer\designer.exe"
 Source: "Qt Designer\*"; DestDir: "{app}\Qt Designer"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
+
 Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
