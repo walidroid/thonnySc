@@ -74,6 +74,35 @@ jobs:
         & ".\Python\python.exe" "get-pip.py" --no-warn-script-location
         Write-Host "Pip installed successfully"
         
+    - name: Download Qt Designer
+      run: |
+        Write-Host "Downloading Qt Designer standalone..."
+        
+        # Option 1: Direct download (if you have a stable URL)
+        # Invoke-WebRequest "https://github.com/fman-users/Qt-Designer-Standalone/releases/download/v5.15.2/qt-designer-standalone-5.15.2-win.zip" -Out "qt-designer.zip"
+        
+        # Option 2: Use cached version or install from PyQt5-tools
+        Write-Host "Installing PyQt5-tools to get Qt Designer..."
+        pip install pyqt5-tools
+        
+        # Find Qt Designer location
+        $pyqt5Path = python -c "import PyQt5; import os; print(os.path.dirname(PyQt5.__file__))"
+        $designerSrc = Join-Path $pyqt5Path "Qt\bin"
+        
+        Write-Host "Copying Qt Designer from: $designerSrc"
+        
+        # Copy to Qt Designer folder
+        New-Item -Path "Qt Designer" -ItemType Directory -Force
+        Copy-Item -Path "$designerSrc\*" -Destination "Qt Designer" -Recurse -Force
+        
+        Write-Host "Qt Designer copied successfully"
+        if (Test-Path "Qt Designer\designer.exe") {
+          Write-Host "✓ designer.exe found"
+        } else {
+          Write-Host "✗ designer.exe not found!"
+        }
+        
+
 
     - name: Build EXE with PyInstaller
       run: |

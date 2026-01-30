@@ -49,6 +49,26 @@ if (Test-Path "Python\Scripts\pip.exe") {
     Write-Host "Pip installed successfully" -ForegroundColor Green
 }
 
+# Step 2.5: Verify Qt Designer
+Write-Host "`n[2.5/5] Verifying Qt Designer..." -ForegroundColor Cyan
+
+$qtDesignerPath = "Qt Designer\designer.exe"
+if (Test-Path $qtDesignerPath) {
+    $qtSize = (Get-Item $qtDesignerPath).Length / 1MB
+    Write-Host "Qt Designer found: $qtDesignerPath ($($qtSize.ToString('F2')) MB)" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Qt Designer not found!" -ForegroundColor Yellow
+    Write-Host "Download from: https://build-system.fman.io/qt-designer-download" -ForegroundColor Yellow
+    Write-Host "Extract to 'Qt Designer' folder in project root" -ForegroundColor Yellow
+    
+    $response = Read-Host "Continue without Qt Designer? (y/n)"
+    if ($response -ne "y") {
+        Write-Host "Build cancelled. Please add Qt Designer and try again." -ForegroundColor Red
+        exit 1
+    }
+}
+
+
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
 pyinstaller thonny.spec

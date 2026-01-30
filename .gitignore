@@ -60,3 +60,10 @@ thonnyapp/thonnyapp.egg-info
 thonnycontrib
 !local_plugins/thonnycontrib
 .python-version
+
+# Build dependencies (downloaded during build)
+Python/
+Qt Designer/
+dist/
+output/
+wheels/
