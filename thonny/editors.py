@@ -1150,7 +1150,11 @@ class EditorNotebook(CustomNotebook):
 
         if target_path:
             # self.close_single_untitled_unmodified_editor()
-            self.show_file(remote_path_to_uri(target_path), propose_dialog=False)
+            if node == "local":
+                uri = local_path_to_uri(target_path)
+            else:
+                uri = remote_path_to_uri(target_path)
+            self.show_file(uri, propose_dialog=False)
 
     def _control_o(self, event):
         # http://stackoverflow.com/questions/22907200/remap-default-keybinding-in-tkinter

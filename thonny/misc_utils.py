@@ -742,9 +742,11 @@ def local_path_to_uri(path: str) -> str:
     if path.startswith("//"):
         # UNC
         return f"{FILE_URI_SCHEME}:{urllib.parse.quote(path)}"
-    elif path[1:3] == ":\\":
-        # Regular Windows path, needs special treatment on other platforms
-        return pathlib.PureWindowsPath(path).as_uri()
+    elif len(path) > 2 and path[1] == ":":
+        # Regular Windows path (can be C:\... or C:/...), needs special treatment on other platforms
+        # Normalize to backslashes first
+        normalized_path = path.replace("/", "\\")
+        return pathlib.PureWindowsPath(normalized_path).as_uri()
     else:
         assert path.startswith("/")
         return f"{FILE_URI_SCHEME}://{urllib.parse.quote(path)}"

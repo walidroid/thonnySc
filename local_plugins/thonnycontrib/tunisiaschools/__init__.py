@@ -109,8 +109,8 @@ def load_plugin():
     get_workbench().add_view(UiViewerPlugin, tr("QT UI Viewer"), "s")
     
     
-    image_path = os.path.join(os.path.dirname(__file__), "res", "qt_32.png")
-    designer_image_path = os.path.join(os.path.dirname(__file__), "res", "designer_32.png")
+    image_path = os.path.join(os.path.dirname(__file__), "res", "code-pyqt.png")
+    designer_image_path = os.path.join(os.path.dirname(__file__), "res", "qt-designer.png")
 	
     get_workbench().add_command(
         "selmen_command",
