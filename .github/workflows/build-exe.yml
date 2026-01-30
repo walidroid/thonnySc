@@ -46,6 +46,35 @@ jobs:
         pip download -r requirements.txt -d wheels
         pip download friendly-traceback -d wheels
         
+    - name: Download Python Embeddable Package
+      run: |
+        $pythonVersion = "3.13.1"
+        $url = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip"
+        Write-Host "Downloading Python embeddable package from $url"
+        Invoke-WebRequest $url -Out "python-embed.zip"
+        Expand-Archive "python-embed.zip" -DestinationPath "Python"
+        Write-Host "Python embeddable package extracted to Python directory"
+        
+    - name: Configure Embeddable Python
+      run: |
+        # Create marker file for Thonny to identify this as private Python
+        New-Item "Python\thonny_python.ini" -ItemType File
+        Write-Host "Created thonny_python.ini marker file"
+        
+        # Enable site packages in ._pth file
+        $pthFile = Get-ChildItem "Python\python*._pth" | Select-Object -First 1
+        if ($pthFile) {
+          Add-Content $pthFile.FullName "`nimport site"
+          Write-Host "Enabled site packages in $($pthFile.Name)"
+        }
+        
+        # Download and install pip
+        Write-Host "Installing pip..."
+        Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -Out "get-pip.py"
+        & ".\Python\python.exe" "get-pip.py" --no-warn-script-location
+        Write-Host "Pip installed successfully"
+        
+
     - name: Build EXE with PyInstaller
       run: |
         pyinstaller thonny.spec

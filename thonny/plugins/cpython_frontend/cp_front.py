@@ -366,6 +366,17 @@ class LocalCPythonConfigurationPage(TabbedBackendDetailsConfigurationPage):
 
 
 def get_default_cpython_executable_for_backend() -> str:
+    # Check for bundled Python when running as PyInstaller frozen executable
+    if getattr(sys, 'frozen', False):
+        # We're running as a PyInstaller bundle
+        app_dir = os.path.dirname(sys.executable)
+        bundled_python = os.path.join(app_dir, "Python", "python.exe")
+        if os.path.exists(bundled_python):
+            logger.info("Using bundled Python: %s", bundled_python)
+            return bundled_python
+        else:
+            logger.warning("Bundled Python not found at %s", bundled_python)
+    
     if is_private_python(sys.executable) and running_in_virtual_environment():
         # Private venv. Make an exception and use base Python for default backend.
         default_path = try_get_base_executable(sys.executable)
