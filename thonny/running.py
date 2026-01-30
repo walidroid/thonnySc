@@ -1976,6 +1976,16 @@ def get_frontend_python():
 
 
 def get_front_interpreter_for_subprocess(candidate=None):
+    # In frozen mode (PyInstaller), use bundled Python instead of Thonny.exe
+    if getattr(sys, 'frozen', False):
+        app_dir = os.path.dirname(sys.executable)
+        bundled_python = os.path.join(app_dir, "Python", "python.exe")
+        if os.path.exists(bundled_python):
+            logger.info("Using bundled Python for subprocess: %s", bundled_python)
+            return bundled_python
+        else:
+            logger.warning("Bundled Python not found at %s, using sys.executable", bundled_python)
+    
     if candidate is None:
         candidate = sys.executable
 
