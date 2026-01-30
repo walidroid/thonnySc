@@ -6,6 +6,9 @@ asttokens==2.4.*
 Send2Trash==1.8.*
 packaging==24.*
 
+# Qt Designer for GUI development
+pyqt5-tools>=5.15.4
+
 # esptool's and paramiko's dependencies (cryptography) are difficult to build on ARM64 Windows. Skipping paramiko for now.
 esptool==4.8.*; platform_machine != 'ARM64' or sys_platform != 'win32'
 bcrypt==4.2.*; platform_machine != 'ARM64' or sys_platform != 'win32'

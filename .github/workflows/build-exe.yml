@@ -38,6 +38,7 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
         pip install friendly-traceback
+        pip install pyqt5-tools
         pip install .
         
     - name: Download offline dependencies
@@ -45,6 +46,7 @@ jobs:
         mkdir wheels
         pip download -r requirements.txt -d wheels
         pip download friendly-traceback -d wheels
+        pip download pyqt5-tools -d wheels
         
     - name: Build EXE with PyInstaller
       run: |

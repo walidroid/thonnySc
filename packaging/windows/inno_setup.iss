@@ -100,7 +100,7 @@ Source: "{#SourceFolder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 Name: "{group}\Thonny"; Filename: "{app}\thonny.exe"; IconFilename: "{app}\thonny.exe"
 ; Desktop shortcuts - created automatically
 Name: "{autodesktop}\Thonny"; Filename: "{app}\thonny.exe"; IconFilename: "{app}\thonny.exe"
-Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Scripts\pyqt5_qt5_designer.exe"; IconFilename: "{app}\Lib\site-packages\thonnycontrib\tunisiaschools\res\designer_16.png"; Check: FileExists(ExpandConstant('{app}\Scripts\pyqt5_qt5_designer.exe'))
+Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"; WorkingDir: "{app}"; Check: FileExists(ExpandConstant('{app}\Lib\site-packages\qt5_applications\Qt\bin\designer.exe'))
 
 
 [Registry]
