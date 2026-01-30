@@ -110,7 +110,7 @@ def load_plugin():
     
     
     image_path = os.path.join(os.path.dirname(__file__), "res", "qt_32.png")
-    designer_image_path = os.path.join(os.path.dirname(__file__), "res", "designer_16.png")
+    designer_image_path = os.path.join(os.path.dirname(__file__), "res", "designer_32.png")
 	
     get_workbench().add_command(
         "selmen_command",
@@ -135,8 +135,8 @@ def load_plugin():
     # Changement de dossier de sauvegarde : 
 
     # en cas ou la date est erroné sur le pc
-    if date.today().year < 2024 :
-        cwd = 'C:\\bac2024'
+    if date.today().year < 2026 :
+        cwd = 'C:\\bac2026'
     else:
         cwd = 'C:\\bac'+str(date.today().year)
     if not os.path.exists(cwd):
