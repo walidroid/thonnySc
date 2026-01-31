@@ -5,7 +5,7 @@ from datetime import date
 from thonny import get_workbench
 from thonny.languages import tr
 from thonny.ui_utils import select_sequence,askopenfilename
-from .UIViewer import UiViewerPlugin
+# from .UIViewer import UiViewerPlugin
 
 from xml.dom import minidom
 global qt_ui_file
@@ -37,8 +37,8 @@ def add_pyqt_code():
         global qt_ui_file
         qt_ui_file = path
         get_workbench().get_menu("pyqt5").delete(1, "end")
-        get_workbench().get_view("UiViewerPlugin").load_new_ui_file(path)
-        get_workbench().show_view("UiViewerPlugin",True)
+        # get_workbench().get_view("UiViewerPlugin").load_new_ui_file(path)
+        # get_workbench().show_view("UiViewerPlugin",True)
         file = minidom.parse(path)
         widgets = file.getElementsByTagName('widget')
         for w in widgets:
@@ -140,7 +140,7 @@ def open_in_designer():
 
 
 def load_plugin():
-    get_workbench().add_view(UiViewerPlugin, tr("QT UI Viewer"), "s")
+    # get_workbench().add_view(UiViewerPlugin, tr("QT UI Viewer"), "s")
     
     
     image_path = os.path.join(os.path.dirname(__file__), "res", "code-pyqt.png")
@@ -169,12 +169,8 @@ def load_plugin():
     # Changement de dossier de sauvegarde : 
 
     # en cas ou la date est erroné sur le pc
-    if date.today().year < 2026 :
-        cwd = 'C:\\bac2026'
-    else:
-        cwd = 'C:\\bac'+str(date.today().year)
-    if not os.path.exists(cwd):
-        os.makedirs(cwd)
+
+    cwd = 'C:\\'
     get_workbench().set_local_cwd(cwd)
 
     # Ne pas ouvrir les derniers fichiers 
