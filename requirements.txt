@@ -1,10 +1,8 @@
 pylint>=2.16.2
-docutils>=0.19
 mypy>=1.0.1
 asttokens>=2.2.1
 Send2Trash>=1.8.0
 packaging>=23.0
-thonny-friendly
 # thonny-palestine-flag  # Package doesn't exist on PyPI
 # thonny-tunisiaschools  # This is a local plugin, not on PyPI
-friendly-traceback>=2.0.0
+friendly-traceback

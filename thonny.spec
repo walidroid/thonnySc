@@ -4,8 +4,14 @@ import os
 
 block_cipher = None
 
-# Collect friendly_traceback data files (locales)
-friendly_datas = collect_data_files('friendly_traceback')
+# Collect friendly_traceback data files and filter to keep only French locale
+friendly_datas_raw = collect_data_files('friendly_traceback')
+friendly_datas = []
+for src, dest in friendly_datas_raw:
+    # Keep only French locale files (+ base files)
+    if ('locales\\\\fr' in src or 'locales/fr' in src or 
+        'friendly_tb.pot' in src or 'py.typed' in src):
+        friendly_datas.append((src, dest))
 
 # Collect metadata for packages that query their version at runtime
 metadata_datas = []
@@ -51,7 +57,7 @@ a = Analysis(
         'thonnycontrib.thonny_quick_switch',
         'pkg_resources.py2_warn',
     ] + friendly_hiddenimports + thonny_hiddenimports,
-    hookspath=[],
+    hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
