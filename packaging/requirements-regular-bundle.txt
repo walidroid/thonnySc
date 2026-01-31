@@ -1,6 +1,7 @@
 pyserial==3.5
 pylint==3.3.*
-docutils==0.21.*
+minny
+
 mypy==1.12.*
 asttokens==2.4.*
 Send2Trash==1.8.*

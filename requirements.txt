@@ -6,3 +6,4 @@ packaging>=23.0
 # thonny-palestine-flag  # Package doesn't exist on PyPI
 # thonny-tunisiaschools  # This is a local plugin, not on PyPI
 friendly-traceback
+minny

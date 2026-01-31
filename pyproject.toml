@@ -90,8 +90,7 @@ module-root = ""
 source-exclude = ["registered.json", ".mypy_cache"]
 source-include = ["/defaults.ini"]
 
-[tool.uv.sources]
-minny = { path = "../minny", editable = true }
+
 
 [tool.black]
 line-length = 100
