@@ -74,6 +74,25 @@ jobs:
         & ".\Python\python.exe" "get-pip.py" --no-warn-script-location
         Write-Host "Pip installed successfully"
         
+    - name: Install Language Server Dependencies
+      run: |
+        Write-Host "Installing ruff for code linting..."
+        & ".\Python\python.exe" -m pip install ruff --no-warn-script-location
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ Ruff installed successfully"
+          
+          # Verify installation
+          $ruffCheck = & ".\Python\python.exe" -c "import ruff; print('OK')" 2>$null
+          if ($ruffCheck -eq "OK") {
+            Write-Host "✓ Ruff verification successful"
+          } else {
+            Write-Host "⚠ Warning: Ruff verification failed"
+          }
+        } else {
+          Write-Host "⚠ Warning: Ruff installation failed"
+        }
+        
     - name: Download Qt Designer
       run: |
         Write-Host "Attempting to download Qt Designer..."
@@ -84,7 +103,7 @@ jobs:
         
         try {
           Write-Host "Downloading Qt Designer from releases..."
-          Invoke-WebRequest $qtDesignerUrl -Out "qt-designer.zip" -ErrorAction SilentlyContinue
+          Invoke-WebRequest $qtDesignerUrl -Out "qt-designer.zip"
           
           if (Test-Path "qt-designer.zip") {
             Write-Host "Extracting Qt Designer..."
@@ -98,28 +117,36 @@ jobs:
             }
           }
         } catch {
-          Write-Host "Qt Designer download failed (this is expected for first build)"
-          Write-Host "Creating empty Qt Designer folder as placeholder..."
-          New-Item -Path "Qt Designer" -ItemType Directory -Force | Out-Null
-          
+          Write-Host "❌ Qt Designer download failed: $_"
           Write-Host ""
           Write-Host "=========================================="
-          Write-Host "IMPORTANT: Qt Designer Not Included in CI Build"
+          Write-Host "IMPORTANT: Qt Designer Not Included"
           Write-Host "=========================================="
-          Write-Host "To include Qt Designer in automated builds:"
-          Write-Host "1. On your local machine, zip the 'Qt Designer' folder"
-          Write-Host "2. Create a GitHub release tag 'qt-designer'"
-          Write-Host "3. Upload qt-designer.zip to that release"
-          Write-Host "4. Future CI builds will download it automatically"
+          Write-Host "Error: $($_.Exception.Message)"
           Write-Host ""
-          Write-Host "Local builds will include Qt Designer normally."
+          Write-Host "Please ensure:"
+          Write-Host "1. Release tag 'qt-designer' exists"
+          Write-Host "2. qt-designer.zip is uploaded to that release"
+          Write-Host "3. File is public and accessible"
           Write-Host "=========================================="
         }
         
-
-
-
-
+    - name: Clean up incompatible plugins
+      run: |
+        Write-Host "Cleaning up incompatible plugins..."
+        
+        # Remove thonny_friendly (incompatible API)
+        if (Test-Path "thonnycontrib\thonny_friendly") {
+          Remove-Item "thonnycontrib\thonny_friendly" -Recurse -Force
+          Write-Host "✓ Removed incompatible thonny_friendly plugin"
+        }
+        
+        # Remove thonny-autosave (missing stdlib dependency)
+        if (Test-Path "thonnycontrib\thonny-autosave") {
+          Remove-Item "thonnycontrib\thonny-autosave" -Recurse -Force
+          Write-Host "✓ Removed thonny-autosave plugin"
+        }
+        
     - name: Build EXE with PyInstaller
       run: |
         pyinstaller thonny.spec
