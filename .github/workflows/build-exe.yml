@@ -97,39 +97,47 @@ jobs:
       run: |
         Write-Host "Attempting to download Qt Designer..."
         
-        # For CI builds, Qt Designer needs to be pre-uploaded to GitHub Releases
-        # Check if we can download from releases
+        # For CI builds, Qt Designer is REQUIRED and must be pre-uploaded to GitHub Releases
         $qtDesignerUrl = "https://github.com/walidroid/thonnysc/releases/download/qt-designer/qt-designer.zip"
         
+        Write-Host "Downloading Qt Designer from releases..."
         try {
-          Write-Host "Downloading Qt Designer from releases..."
           Invoke-WebRequest $qtDesignerUrl -Out "qt-designer.zip"
-          
-          if (Test-Path "qt-designer.zip") {
-            Write-Host "Extracting Qt Designer..."
-            Expand-Archive "qt-designer.zip" -DestinationPath "." -Force
-            Remove-Item "qt-designer.zip"
-            
-            if (Test-Path "Qt Designer\designer.exe") {
-              Write-Host "✓ Qt Designer downloaded and extracted successfully"
-            } else {
-              Write-Host "✗ designer.exe not found after extraction"
-            }
-          }
         } catch {
-          Write-Host "❌ Qt Designer download failed: $_"
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "IMPORTANT: Qt Designer Not Included"
-          Write-Host "=========================================="
+          Write-Host "❌ CRITICAL ERROR: Failed to download Qt Designer"
           Write-Host "Error: $($_.Exception.Message)"
           Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "Build cannot proceed without Qt Designer"
+          Write-Host "=========================================="
           Write-Host "Please ensure:"
-          Write-Host "1. Release tag 'qt-designer' exists"
+          Write-Host "1. Release tag 'qt-designer' exists at:"
+          Write-Host "   https://github.com/walidroid/thonnysc/releases/tag/qt-designer"
           Write-Host "2. qt-designer.zip is uploaded to that release"
           Write-Host "3. File is public and accessible"
           Write-Host "=========================================="
+          exit 1
         }
+        
+        # Verify download
+        if (-not (Test-Path "qt-designer.zip")) {
+          Write-Host "❌ CRITICAL ERROR: qt-designer.zip not found after download"
+          exit 1
+        }
+        
+        Write-Host "Extracting Qt Designer..."
+        Expand-Archive "qt-designer.zip" -DestinationPath "." -Force
+        Remove-Item "qt-designer.zip"
+        
+        # Verify extraction
+        if (-not (Test-Path "Qt Designer\designer.exe")) {
+          Write-Host "❌ CRITICAL ERROR: designer.exe not found after extraction"
+          Write-Host "Qt Designer directory contents:"
+          Get-ChildItem "Qt Designer" -Recurse | Select-Object FullName
+          exit 1
+        }
+        
+        Write-Host "✓ Qt Designer downloaded and extracted successfully"
         
     - name: Clean up incompatible plugins
       run: |
