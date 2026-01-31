@@ -7,10 +7,10 @@ Send2Trash==1.8.*
 packaging==24.*
 
 # esptool's and paramiko's dependencies (cryptography) are difficult to build on ARM64 Windows. Skipping paramiko for now.
-esptool==4.8.*; platform_machine != 'ARM64' or sys_platform != 'win32'
-bcrypt==4.2.*; platform_machine != 'ARM64' or sys_platform != 'win32'
-cryptography==42.*; platform_machine != 'ARM64' or sys_platform != 'win32'
-paramiko==3.5.*; platform_machine != 'ARM64' or sys_platform != 'win32'
+esptool==5.1.0; platform_machine != 'ARM64' or sys_platform != 'win32'
+bcrypt; platform_machine != 'ARM64' or sys_platform != 'win32'
+cryptography; platform_machine != 'ARM64' or sys_platform != 'win32'
+paramiko; platform_machine != 'ARM64' or sys_platform != 'win32'
 
 websockets==13.1.*
 ptyprocess==0.7.*; sys_platform == "linux" or sys_platform == "darwin"

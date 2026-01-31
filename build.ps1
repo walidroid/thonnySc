@@ -106,6 +106,24 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: PyQt5 installation failed - .ui files may not load" -ForegroundColor Yellow
 }
 
+# Step 2.6.2: Install esptool for ESP32/ESP8266
+Write-Host "`nInstalling esptool for ESP32/ESP8266 support..."
+& ".\Python\python.exe" -m pip install esptool==5.1.0 --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "esptool installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $esptoolCheck = & ".\Python\python.exe" -c "import esptool; print('OK')" 2>$null
+    if ($esptoolCheck -eq "OK") {
+        Write-Host "esptool verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: esptool verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: esptool installation failed - ESP32/ESP8266 support unavailable" -ForegroundColor Yellow
+}
+
 # Step 2.7: Clean up problematic plugins
 Write-Host "`n[2.7/5] Cleaning up incompatible plugins..." -ForegroundColor Cyan
 

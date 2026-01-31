@@ -112,6 +112,25 @@ jobs:
           Write-Host "⚠ Warning: PyQt5 installation failed"
         }
         
+    - name: Install esptool for ESP32/ESP8266
+      run: |
+        Write-Host "Installing esptool for ESP32/ESP8266 support..."
+        & ".\\Python\\python.exe" -m pip install esptool==5.1.0 --no-warn-script-location
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ esptool installed successfully"
+          
+          # Verify installation
+          $esptoolCheck = & ".\\Python\\python.exe" -c "import esptool; print('OK')" 2>$null
+          if ($esptoolCheck -eq "OK") {
+            Write-Host "✓ esptool verification successful"
+          } else {
+            Write-Host "⚠ Warning: esptool verification failed"
+          }
+        } else {
+          Write-Host "⚠ Warning: esptool installation failed"
+        }
+        
     - name: Download Qt Designer
       run: |
         Write-Host "Attempting to download Qt Designer..."
