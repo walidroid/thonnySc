@@ -88,6 +88,24 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: Ruff installation failed - language server features may not work" -ForegroundColor Yellow
 }
 
+# Step 2.6.1: Install PyQt5 for Qt Designer
+Write-Host "`nInstalling PyQt5 for .ui file loading..."
+& ".\Python\python.exe" -m pip install PyQt5 --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "PyQt5 installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $pyqt5Check = & ".\Python\python.exe" -c "from PyQt5.uic import loadUi; print('OK')" 2>$null
+    if ($pyqt5Check -eq "OK") {
+        Write-Host "PyQt5.uic verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: PyQt5.uic verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: PyQt5 installation failed - .ui files may not load" -ForegroundColor Yellow
+}
+
 # Step 2.7: Clean up problematic plugins
 Write-Host "`n[2.7/5] Cleaning up incompatible plugins..." -ForegroundColor Cyan
 
