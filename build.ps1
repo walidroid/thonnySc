@@ -55,7 +55,7 @@ Write-Host "`n[2.5/5] Verifying Qt Designer..." -ForegroundColor Cyan
 $qtDesignerPath = "Qt Designer\designer.exe"
 if (Test-Path $qtDesignerPath) {
     $qtSize = (Get-Item $qtDesignerPath).Length / 1MB
-    Write-Host "Qt Designer found: $qtDesignerPath ($($qtSize.ToString('F2')) MB)" -ForegroundColor Green
+    Write-Host "Qt Designer found: $qtDesignerPath ($([math]::Round($qtSize, 2)) MB)" -ForegroundColor Green
 } else {
     Write-Host "WARNING: Qt Designer not found!" -ForegroundColor Yellow
     Write-Host "Download from: https://build-system.fman.io/qt-designer-download" -ForegroundColor Yellow
@@ -67,7 +67,6 @@ if (Test-Path $qtDesignerPath) {
         exit 1
     }
 }
-
 
 # Step 2.6: Install Language Server Dependencies
 Write-Host "`n[2.6/5] Installing Language Server Dependencies..." -ForegroundColor Cyan
@@ -81,12 +80,12 @@ if ($LASTEXITCODE -eq 0) {
     # Verify installation
     $ruffCheck = & ".\Python\python.exe" -c "import ruff; print('OK')" 2>$null
     if ($ruffCheck -eq "OK") {
-        Write-Host "✓ Ruff verification successful" -ForegroundColor Green
+        Write-Host "Ruff verification successful" -ForegroundColor Green
     } else {
-        Write-Host "⚠ Warning: Ruff verification failed" -ForegroundColor Yellow
+        Write-Host "Warning: Ruff verification failed" -ForegroundColor Yellow
     }
 } else {
-    Write-Host "⚠ Warning: Ruff installation failed - language server features may not work" -ForegroundColor Yellow
+    Write-Host "Warning: Ruff installation failed - language server features may not work" -ForegroundColor Yellow
 }
 
 # Step 2.7: Clean up problematic plugins
@@ -139,7 +138,7 @@ Write-Host "`n[5/5] Build Complete!" -ForegroundColor Green
 Write-Host "`nOutput:" -ForegroundColor Cyan
 if (Test-Path "output\ThonnySc_v$version.exe") {
     $size = (Get-Item "output\ThonnySc_v$version.exe").Length / 1MB
-    Write-Host "  Installer: output\ThonnySc_v$version.exe ($($size.ToString('F2')) MB)" -ForegroundColor White
+    Write-Host "  Installer: output\ThonnySc_v$version.exe ($([math]::Round($size, 2)) MB)" -ForegroundColor White
 }
 
 Write-Host "`nNext steps:" -ForegroundColor Yellow

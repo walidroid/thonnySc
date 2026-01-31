@@ -43,7 +43,10 @@ Source: "Python\*"; DestDir: "{app}\Python"; Flags: ignoreversion recursesubdirs
 Source: "Qt Designer\*"; DestDir: "{app}\Qt Designer"; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 
+; Conditionally include wheels if folder exists
+#ifexist "wheels\*"
 Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 
 [Icons]
 ; Start Menu shortcut
