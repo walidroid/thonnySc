@@ -69,6 +69,42 @@ if (Test-Path $qtDesignerPath) {
 }
 
 
+# Step 2.6: Install Language Server Dependencies
+Write-Host "`n[2.6/5] Installing Language Server Dependencies..." -ForegroundColor Cyan
+
+Write-Host "Installing ruff for code linting..."
+& ".\Python\python.exe" -m pip install ruff --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Ruff installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $ruffCheck = & ".\Python\python.exe" -c "import ruff; print('OK')" 2>$null
+    if ($ruffCheck -eq "OK") {
+        Write-Host "✓ Ruff verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "⚠ Warning: Ruff verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠ Warning: Ruff installation failed - language server features may not work" -ForegroundColor Yellow
+}
+
+# Step 2.7: Clean up problematic plugins
+Write-Host "`n[2.7/5] Cleaning up incompatible plugins..." -ForegroundColor Cyan
+
+# Remove thonny_friendly (incompatible API)
+if (Test-Path "thonnycontrib\thonny_friendly") {
+    Remove-Item "thonnycontrib\thonny_friendly" -Recurse -Force
+    Write-Host "Removed incompatible thonny_friendly plugin" -ForegroundColor Green
+}
+
+# Remove thonny-autosave (missing stdlib dependency)
+if (Test-Path "thonnycontrib\thonny-autosave") {
+    Remove-Item "thonnycontrib\thonny-autosave" -Recurse -Force
+    Write-Host "Removed thonny-autosave plugin (missing sched module)" -ForegroundColor Green
+}
+
+
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
 pyinstaller thonny.spec
