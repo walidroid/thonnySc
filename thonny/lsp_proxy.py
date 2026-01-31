@@ -1140,24 +1140,37 @@ class LanguageServerProxy(ABC):
         logger.info("_listen_stderr done")
 
     def _handle_message_from_server(self, msg: Dict) -> None:
+        # Defensive programming: handle None or invalid messages from language server
+        if msg is None:
+            logger.warning("Received None message from language server, ignoring")
+            return
+        
+        if not isinstance(msg, dict):
+            logger.warning("Received non-dict message from language server: %r", type(msg))
+            return
+        
         logger.debug("Handling message from server: %r", msg)
         if get_workbench().in_debug_mode():
             self._add_to_communication_log(msg, "SERVER")
-        method = msg.get("method")
-        result = msg.get("result")
-        error = msg.get("error")
-        request_id = msg.get("id")
-        params = msg.get("params")
+        
+        try:
+            method = msg.get("method")
+            result = msg.get("result")
+            error = msg.get("error")
+            request_id = msg.get("id")
+            params = msg.get("params")
 
-        if method is not None:
-            if request_id is not None:
-                self._handle_request_from_server(request_id, method, params)
+            if method is not None:
+                if request_id is not None:
+                    self._handle_request_from_server(request_id, method, params)
+                else:
+                    self._handle_notification_from_server(method, params)
+            elif request_id is not None:
+                self._handle_response_from_server(request_id, result, error)
             else:
-                self._handle_notification_from_server(method, params)
-        elif request_id is not None:
-            self._handle_response_from_server(request_id, result, error)
-        else:
-            raise RuntimeError(f"Don't know how to handle {msg}")
+                raise RuntimeError(f"Don't know how to handle {msg}")
+        except Exception as e:
+            logger.error("Error processing language server message: %s", e, exc_info=True)
 
     def _handle_response_from_server(
         self, request_id: Union[str, int], result: Optional[Dict], error: Optional[Dict]
