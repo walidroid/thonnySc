@@ -124,6 +124,45 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: esptool installation failed - ESP32/ESP8266 support unavailable" -ForegroundColor Yellow
 }
 
+# Step 2.6.3: Install minny for backend communication
+Write-Host "`nInstalling minny for backend communication..."
+& ".\Python\python.exe" -m pip install minny --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "minny installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $minnyCheck = & ".\Python\python.exe" -c "import minny; print('OK')" 2>$null
+    if ($minnyCheck -eq "OK") {
+        Write-Host "minny verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: minny verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: minny installation failed - Backend may not work" -ForegroundColor Yellow
+}
+
+# Step 2.6.4: Install thonny-autosave and missing stdlib dependencies
+Write-Host "`nInstalling thonny-autosave and dependencies..."
+
+# Copy sched.py (missing from embeddable python)
+$hostSched = "C:\Users\Walid\AppData\Local\Programs\Python\Python313\Lib\sched.py"
+if (Test-Path $hostSched) {
+    Copy-Item $hostSched -Destination "Python\sched.py" -Force
+    Write-Host "Copied sched.py to bundled Python" -ForegroundColor Green
+} else {
+    Write-Host "Warning: Could not find host sched.py at $hostSched" -ForegroundColor Yellow
+}
+
+# Install the plugin (no-deps to avoid installing older Thonny version)
+& ".\Python\python.exe" -m pip install thonny-autosave --no-deps --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "thonny-autosave installed successfully" -ForegroundColor Green
+} else {
+    Write-Host "Warning: thonny-autosave installation failed" -ForegroundColor Yellow
+}
+
 # Step 2.7: Clean up problematic plugins
 Write-Host "`n[2.7/5] Cleaning up incompatible plugins..." -ForegroundColor Cyan
 
@@ -133,11 +172,7 @@ if (Test-Path "thonnycontrib\thonny_friendly") {
     Write-Host "Removed incompatible thonny_friendly plugin" -ForegroundColor Green
 }
 
-# Remove thonny-autosave (missing stdlib dependency)
-if (Test-Path "thonnycontrib\thonny-autosave") {
-    Remove-Item "thonnycontrib\thonny-autosave" -Recurse -Force
-    Write-Host "Removed thonny-autosave plugin (missing sched module)" -ForegroundColor Green
-}
+# thonny-autosave restored (sched.py provided)
 
 
 # Step 3: Build with PyInstaller
