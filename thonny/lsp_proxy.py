@@ -134,7 +134,9 @@ class LanguageServerProxy(ABC):
                 raise RuntimeError("Server has been closed")
 
             if self.server_capabilities is None:
-                raise RuntimeError("Server hasn't been initialized yet")
+                # raise RuntimeError("Server hasn't been initialized yet")
+                logger.warning("Server hasn't been initialized yet")
+                return
 
     def _invalidate(self):
         if not self._invalidated:
@@ -1134,7 +1136,13 @@ class LanguageServerProxy(ABC):
         try:
             while self._server_process_alive():
                 line = self._proc.stderr.readline()
-                logger.error("Language server STDERR: %s", line.decode("utf-8"))
+                line_str = line.decode("utf-8", "replace")
+                if "INFO" in line_str or "[INFO]" in line_str or " WARN " in line_str:
+                    logger.info("Language server log: %s", line_str.strip())
+                elif "ERROR" in line_str:
+                     logger.error("Language server STDERR: %s", line_str.strip())
+                else:
+                    logger.info("Language server output: %s", line_str.strip())
         except Exception:
             logger.exception("_listen_stderr failed")
         logger.info("_listen_stderr done")
