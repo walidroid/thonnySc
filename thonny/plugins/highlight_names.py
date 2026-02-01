@@ -80,10 +80,13 @@ class OccurrencesHighlighter:
         if uri is None:
             return
 
+        import time, logging
+        t0 = time.perf_counter()
         ls_proxy.request_document_highlight(
             DocumentHighlightParams(textDocument=TextDocumentIdentifier(uri=uri), position=pos),
             self._handle_response,
         )
+        logging.warning("LSP HIGHLIGHT_REQ took %.2f ms", (time.perf_counter() - t0) * 1000)
 
     def _handle_response(
         self, response: LspResponse[Union[List[lsp_types.DocumentHighlight], None]]

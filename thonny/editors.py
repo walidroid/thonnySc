@@ -805,6 +805,10 @@ class Editor(BaseEditor):
         self._primed_ls_proxies.append(ls_proxy)
 
     def _consider_sending_changes_to_server(self, event=None):
+        import time, logging, threading
+        start_probe = time.perf_counter()
+        logging.warning("CHANGE START | thread=%s", threading.current_thread().name)
+        
         time_since_last_change = time.time() - self._last_change_time
 
         if time_since_last_change >= DEBOUNCE_SECONDS:
@@ -812,6 +816,8 @@ class Editor(BaseEditor):
         else:
             wait_time = DEBOUNCE_SECONDS - time_since_last_change
             self.after(int(wait_time * 1000), self._consider_sending_changes_to_server)
+        
+        logging.warning("CHANGE END | took=%.2f ms", (time.perf_counter() - start_probe) * 1000)
 
     def send_changes_to_primed_servers(self) -> None:
         if not self._unpublished_incremental_changes:
@@ -849,14 +855,20 @@ class Editor(BaseEditor):
 
         version = self._get_version_to_be_published()
         for ls_proxy in self._primed_ls_proxies:
-            ls_proxy.notify_did_change_text_document(
-                DidChangeTextDocumentParams(
-                    textDocument=VersionedTextDocumentIdentifier(
-                        version=version, uri=self.get_uri()
-                    ),
-                    contentChanges=ls_changes,
+            import time, logging
+            t0 = time.perf_counter()
+            try:
+                ls_proxy.notify_did_change_text_document(
+                    DidChangeTextDocumentParams(
+                        textDocument=VersionedTextDocumentIdentifier(
+                            version=version, uri=self.get_uri()
+                        ),
+                        contentChanges=ls_changes,
+                    )
                 )
-            )
+                logging.warning("LSP DID_CHANGE call took %.2f ms", (time.perf_counter() - t0) * 1000)
+            except Exception as e:
+                logging.exception("LSP DID_CHANGE failed")
 
         self._unpublished_incremental_changes = []
 
