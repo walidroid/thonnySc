@@ -372,7 +372,7 @@ def load_plugin() -> None:
     if not os.path.exists(get_log_dir()):
         os.makedirs(get_log_dir())
 
-    get_workbench().set_default("general.event_logging", True)
+    get_workbench().set_default("general.event_logging", False)
 
     if get_workbench().get_option("general.event_logging"):
         get_workbench().add_command(

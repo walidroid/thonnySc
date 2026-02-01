@@ -58,6 +58,7 @@ def custom_excepthook(exc_type, exc_value, exc_traceback):
     sys.stderr.flush()
 
 def load_plugin() -> None:
+    return # Disabled to fix freeze/crash
     """Initialize the error translation plugin."""
     print("[ERROR_TRANSLATOR] load_plugin() called", flush=True)
     

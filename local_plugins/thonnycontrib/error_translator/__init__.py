@@ -80,6 +80,8 @@ def handle_program_output(event):
         logger.exception("Error in error_translator plugin: %s", e)
 
 def load_plugin():
+    return # Disabled to fix freeze/crash
+    return # Disabled duplicate plugin to fix freeze
     """Initialize the error translation plugin."""
     print("[ERROR_TRANSLATOR] Loading plugin...", flush=True)  # Debug
     
