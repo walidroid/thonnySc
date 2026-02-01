@@ -2801,10 +2801,7 @@ class Workbench(tk.Tk):
         self._closing = True
         self.shut_down_language_servers()
         try:
-            from thonny.plugins import replayer
 
-            if replayer.instance is not None:
-                replayer.instance.close()
             self._save_layout()
             self._editor_notebook.remember_open_files()
             self.event_generate("WorkbenchClose", widget=self)
