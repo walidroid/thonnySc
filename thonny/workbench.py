@@ -440,91 +440,94 @@ class Workbench(tk.Tk):
         self.shut_down_language_servers()
 
         for class_ in self._language_server_proxy_classes:
-            logger.info("Constructing language server %s", class_)
-            ls_proxy = class_(
-                InitializeParams(
-                    capabilities=ClientCapabilities(
-                        workspace=WorkspaceClientCapabilities(
-                            applyEdit=None,
-                            codeLens=None,
-                            fileOperations=None,
-                            inlineValue=None,
-                            inlayHint=None,
-                            diagnostics=None,
-                            # workspaceFolders=True, # TODO: This may require workspace/didChangeWorkspaceFolders to activate Pyright?
-                        ),
-                        textDocument=TextDocumentClientCapabilities(
-                            publishDiagnostics=PublishDiagnosticsClientCapabilities(
-                                relatedInformation=False
+            try:
+                logger.info("Constructing language server %s", class_)
+                ls_proxy = class_(
+                    InitializeParams(
+                        capabilities=ClientCapabilities(
+                            workspace=WorkspaceClientCapabilities(
+                                applyEdit=None,
+                                codeLens=None,
+                                fileOperations=None,
+                                inlineValue=None,
+                                inlayHint=None,
+                                diagnostics=None,
+                                # workspaceFolders=True, # TODO: This may require workspace/didChangeWorkspaceFolders to activate Pyright?
                             ),
-                            synchronization=TextDocumentSyncClientCapabilities(),
-                            documentSymbol=DocumentSymbolClientCapabilities(
-                                symbolKind=SymbolKinds(
-                                    [
-                                        SymbolKind.Enum,
-                                        SymbolKind.Class,
-                                        SymbolKind.Method,
-                                        SymbolKind.Property,
-                                        SymbolKind.Function,
-                                    ]
+                            textDocument=TextDocumentClientCapabilities(
+                                publishDiagnostics=PublishDiagnosticsClientCapabilities(
+                                    relatedInformation=False
                                 ),
-                                hierarchicalDocumentSymbolSupport=True,
-                            ),
-                            completion=CompletionClientCapabilities(
-                                completionItem=CompletionClientCapabilitiesCompletionItem(
-                                    snippetSupport=False,
-                                    commitCharactersSupport=True,
-                                    documentationFormat=None,  # TODO
-                                    deprecatedSupport=False,  # TODO
-                                    preselectSupport=True,
-                                    insertReplaceSupport=True,
-                                    labelDetailsSupport=False,
-                                ),
-                                completionItemKind=None,  # TODO
-                                insertTextMode=None,
-                                contextSupport=False,
-                                completionList=CompletionClientCapabilitiesCompletionList(
-                                    itemDefaults=["commitCharacters"]
-                                ),
-                            ),
-                            signatureHelp=SignatureHelpClientCapabilities(
-                                signatureInformation=SignatureHelpClientCapabilitiesSignatureInformation(
-                                    documentationFormat=[MarkupKind.PlainText, MarkupKind.Markdown],
-                                    parameterInformation=SignatureHelpClientCapabilitiesParameterInformation(
-                                        labelOffsetSupport=True
+                                synchronization=TextDocumentSyncClientCapabilities(),
+                                documentSymbol=DocumentSymbolClientCapabilities(
+                                    symbolKind=SymbolKinds(
+                                        [
+                                            SymbolKind.Enum,
+                                            SymbolKind.Class,
+                                            SymbolKind.Method,
+                                            SymbolKind.Property,
+                                            SymbolKind.Function,
+                                        ]
                                     ),
-                                    activeParameterSupport=True,
-                                )
+                                    hierarchicalDocumentSymbolSupport=True,
+                                ),
+                                completion=CompletionClientCapabilities(
+                                    completionItem=CompletionClientCapabilitiesCompletionItem(
+                                        snippetSupport=False,
+                                        commitCharactersSupport=True,
+                                        documentationFormat=None,  # TODO
+                                        deprecatedSupport=False,  # TODO
+                                        preselectSupport=True,
+                                        insertReplaceSupport=True,
+                                        labelDetailsSupport=False,
+                                    ),
+                                    completionItemKind=None,  # TODO
+                                    insertTextMode=None,
+                                    contextSupport=False,
+                                    completionList=CompletionClientCapabilitiesCompletionList(
+                                        itemDefaults=["commitCharacters"]
+                                    ),
+                                ),
+                                signatureHelp=SignatureHelpClientCapabilities(
+                                    signatureInformation=SignatureHelpClientCapabilitiesSignatureInformation(
+                                        documentationFormat=[MarkupKind.PlainText, MarkupKind.Markdown],
+                                        parameterInformation=SignatureHelpClientCapabilitiesParameterInformation(
+                                            labelOffsetSupport=True
+                                        ),
+                                        activeParameterSupport=True,
+                                    )
+                                ),
+                                definition=DefinitionClientCapabilities(linkSupport=True),
+                                documentHighlight=DocumentHighlightClientCapabilities(),
                             ),
-                            definition=DefinitionClientCapabilities(linkSupport=True),
-                            documentHighlight=DocumentHighlightClientCapabilities(),
+                            notebookDocument=None,
+                            window=WindowClientCapabilities(
+                                workDoneProgress=None,
+                                showMessage=None,
+                                showDocument=None,
+                            ),
+                            general=GeneralClientCapabilities(
+                                staleRequestSupport=None,
+                                regularExpressions=None,
+                                markdown=None,
+                                positionEncodings=[PositionEncodingKind.UTF16],
+                            ),
                         ),
-                        notebookDocument=None,
-                        window=WindowClientCapabilities(
-                            workDoneProgress=None,
-                            showMessage=None,
-                            showDocument=None,
-                        ),
-                        general=GeneralClientCapabilities(
-                            staleRequestSupport=None,
-                            regularExpressions=None,
-                            markdown=None,
-                            positionEncodings=[PositionEncodingKind.UTF16],
-                        ),
-                    ),
-                    processId=os.getpid(),
-                    clientInfo=ClientInfo(name="Thonny", version=thonny.get_version()),
-                    locale=self.get_option("general.language"),
-                    workspaceFolders=[
-                        WorkspaceFolder(
-                            uri=pathlib.Path(self.get_local_cwd()).as_uri(), name="localws"
-                        ),
-                    ],
-                    trace=TraceValues.Verbose if self.in_debug_mode() else TraceValues.Messages,
+                        processId=os.getpid(),
+                        clientInfo=ClientInfo(name="Thonny", version=thonny.get_version()),
+                        locale=self.get_option("general.language"),
+                        workspaceFolders=[
+                            WorkspaceFolder(
+                                uri=pathlib.Path(self.get_local_cwd()).as_uri(), name="localws"
+                            ),
+                        ],
+                        trace=TraceValues.Verbose if self.in_debug_mode() else TraceValues.Messages,
+                    )
                 )
-            )
 
-            self._ls_proxies.append(ls_proxy)
+                self._ls_proxies.append(ls_proxy)
+            except Exception:
+                logger.exception("Failed to construct language server %s", class_)
 
     def shut_down_language_servers(self):
         for ls_proxy in self._ls_proxies:
