@@ -61,7 +61,7 @@ if (Test-Path $qtDesignerPath) {
     Write-Host "Download from: https://build-system.fman.io/qt-designer-download" -ForegroundColor Yellow
     Write-Host "Extract to 'Qt Designer' folder in project root" -ForegroundColor Yellow
     
-    $response = Read-Host "Continue without Qt Designer? (y/n)"
+    $response = if ($env:CI -eq "true") { "y" } else { Read-Host "Continue without Qt Designer? (y/n)" }
     if ($response -ne "y") {
         Write-Host "Build cancelled. Please add Qt Designer and try again." -ForegroundColor Red
         exit 1
@@ -175,6 +175,11 @@ if ($LASTEXITCODE -eq 0) {
     }
 } else {
     Write-Host "Warning: numpy installation failed" -ForegroundColor Yellow
+}
+
+if (Test-Path "requirements.txt") {
+    Write-Host "`nInstalling requirements.txt..." -ForegroundColor Cyan
+    & ".\Python\python.exe" -m pip install -r requirements.txt --no-warn-script-location
 }
 
 # Step 2.7: Clean up problematic plugins

@@ -1,0 +1,41 @@
+name: Build Installer
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y
+      - name: Build
+        shell: powershell
+        run: |
+          $env:CI = "true"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1
+      - name: Validate Bundled Dependencies
+        shell: powershell
+        run: |
+          $mods = @('numpy','esptool','serial','friendly_traceback','asttokens','packaging','minny','pylint','mypy','wheel','send2trash')
+          foreach ($m in $mods) {
+            & ".\Python\python.exe" -c "import $m; print('$m OK')" | Out-Host
+          }
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThonnySc-installer
+          path: |
+            output\ThonnySc_v1.0.0.exe
+            dist\Thonny\**
+          if-no-files-found: warn

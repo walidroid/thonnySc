@@ -3,6 +3,10 @@ mypy>=1.0.1
 asttokens>=2.2.1
 Send2Trash>=1.8.0
 packaging>=23.0
+esptool == 5.1.0
+pyserial == 3.5
+wheel == 0.45.1
+numpy == 2.4.0
 # thonny-palestine-flag  # Package doesn't exist on PyPI
 # thonny-tunisiaschools  # This is a local plugin, not on PyPI
 friendly-traceback
