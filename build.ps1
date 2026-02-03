@@ -163,6 +163,20 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: thonny-autosave installation failed" -ForegroundColor Yellow
 }
 
+$numpyTarget = "numpy"
+Write-Host "`nInstalling $numpyTarget..." -ForegroundColor Cyan
+& ".\Python\python.exe" -m pip install $numpyTarget --no-warn-script-location
+if ($LASTEXITCODE -eq 0) {
+    $numpyCheck = & ".\Python\python.exe" -c "import numpy as np; import numpy.linalg; print('OK')" 2>$null
+    if ($numpyCheck -eq "OK") {
+        Write-Host "numpy verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: numpy verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: numpy installation failed" -ForegroundColor Yellow
+}
+
 # Step 2.7: Clean up problematic plugins
 Write-Host "`n[2.7/5] Cleaning up incompatible plugins..." -ForegroundColor Cyan
 
