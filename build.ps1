@@ -2,6 +2,7 @@
 # This script downloads Python embeddable package and builds the installer locally
 
 Write-Host "=== ThonnySc Build Script ===" -ForegroundColor Green
+Set-Location -Path $PSScriptRoot
 
 # Step 1: Download Python Embeddable Package
 Write-Host "`n[1/5] Downloading Python Embeddable Package..." -ForegroundColor Cyan
@@ -179,9 +180,16 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: numpy installation failed" -ForegroundColor Yellow
 }
 
-if (Test-Path "requirements.txt") {
+$requirementsPath = Join-Path $PSScriptRoot "requirements.txt"
+if (Test-Path $requirementsPath) {
     Write-Host "`nInstalling requirements.txt..." -ForegroundColor Cyan
-    & ".\Python\python.exe" -m pip install -r requirements.txt --no-warn-script-location --no-cache-dir --no-binary mypy
+    & ".\Python\python.exe" -m pip install -r $requirementsPath --no-warn-script-location --no-cache-dir --no-binary mypy
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Requirements installation failed" -ForegroundColor Red
+        exit 1
+    }
+} else {
+    Write-Host "WARNING: requirements.txt not found at $requirementsPath" -ForegroundColor Yellow
 }
 
 # Step 2.7: Clean up problematic plugins
