@@ -153,4 +153,28 @@ class PyrightProxy(LanguageServerProxy):
 
 
 def load_plugin():
-    get_workbench().add_language_server_proxy_class(PyrightProxy)
+    # Check if node is available before registering the proxy
+    # Logic adapted from PyrightProxy._get_node_path
+    
+    # 1. Check in python directory
+    bin_dir = os.path.dirname(sys.executable)
+    exe_name = "node.exe" if os.name == "nt" else "node"
+    if os.path.isfile(os.path.join(bin_dir, exe_name)):
+        get_workbench().add_language_server_proxy_class(PyrightProxy)
+        return
+
+    # 2. Check in thonny dev directory (if running from source)
+    import thonny
+    dev_dir = os.path.dirname(os.path.dirname(thonny.__file__))
+    if os.path.isfile(os.path.join(dev_dir, exe_name)):
+        get_workbench().add_language_server_proxy_class(PyrightProxy)
+        return
+
+    # 3. Check in PATH
+    if shutil.which(exe_name):
+        get_workbench().add_language_server_proxy_class(PyrightProxy)
+        return
+
+    # If we are here, node is missing. We log a warning but don't add the proxy
+    # so we avoid the UserError traceback during startup.
+    logger.info("Pyright / Node.js not found. Pyright language server will be disabled.")

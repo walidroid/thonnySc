@@ -70,6 +70,11 @@ class OccurrencesHighlighter:
         if ls_proxy is None:
             return
 
+        # Check if the server supports document highlight
+        caps = ls_proxy.server_capabilities
+        if caps is None or not caps.documentHighlightProvider:
+            return
+
         ls_proxy.unbind_request_handler(self._handle_response)
 
         pos = get_cursor_ls_position(self.text)
@@ -93,7 +98,8 @@ class OccurrencesHighlighter:
     ) -> None:
         error = response.get_error()
         if error:
-            messagebox.showerror(tr("Error"), str(error), master=get_workbench())
+            # Don't annoy user with an error popup for a background feature
+            logger.info("Error when querying document highlights: %s", str(error))
             return
 
         # TODO: check if the situation is still the same

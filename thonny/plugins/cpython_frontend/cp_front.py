@@ -56,7 +56,19 @@ class LocalCPythonProxy(SubprocessProxy):
     def _get_launch_cwd(self):
         # use a directory which doesn't contain misleading modules
         empty_dir = os.path.join(thonny.get_thonny_user_dir(), "leave_this_empty")
-        os.makedirs(empty_dir, exist_ok=True)
+        
+        if os.path.isfile(empty_dir):
+            try:
+                os.remove(empty_dir)
+            except Exception:
+                logger.warning("Could not remove file conflicting with empty dir: %s", empty_dir)
+        
+        try:
+            os.makedirs(empty_dir, exist_ok=True)
+        except OSError:
+            logger.warning("Could not create empty dir %s", empty_dir)
+            return thonny.get_thonny_user_dir()
+            
         return empty_dir
 
     def _get_launcher_with_args(self):

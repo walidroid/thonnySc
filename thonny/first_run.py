@@ -90,17 +90,22 @@ class FirstRunWindow(tk.Tk):
         self.eval("tk::PlaceWindow . center")
 
     def on_ok(self):
+        print("DEBUG: Clicking Let's go")
         if self.mode_variable.get() in [SIMPLE_MODE_TEXT, RPI_MODE_TEXT]:
             self.conf.set_option("general.ui_mode", "simple")
             if self.mode_variable.get() == RPI_MODE_TEXT:
                 self.conf.set_option("debugger.preferred_debugger", "faster")
                 self.conf.set_option("view.ui_theme", "Raspberry Pi")
 
+        print("DEBUG: Setting language...")
         self.conf.set_option(
             "general.language", languages.get_language_code_by_name(self.language_variable.get())
         )
 
+        print("DEBUG: Saving config...")
         self.conf.save()
 
+        print("DEBUG: Closing welcome window...")
         self.ok = True
         self.destroy()
+        print("DEBUG: Welcome window closed")

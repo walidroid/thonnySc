@@ -92,19 +92,8 @@ def run() -> int:
 
 
 def _check_welcome():
-    from thonny import misc_utils
-
-    if not os.path.exists(get_configuration_file()) and not misc_utils.running_on_rpi():
-        from thonny.config import ConfigurationManager
-        from thonny.first_run import FirstRunWindow
-
-        mgr = ConfigurationManager(get_configuration_file())
-
-        win = FirstRunWindow(mgr)
-        win.mainloop()
-        return win.ok
-    else:
-        return True
+    # Bypass First Run window
+    return True
 
 
 def _should_delegate():

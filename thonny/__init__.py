@@ -264,8 +264,28 @@ def configure_logging(log_file, console_level=None):
         "%(asctime)s.%(msecs)03d [%(threadName)s] %(levelname)-7s %(name)s: %(message)s", "%H:%M:%S"
     )
 
-    file_handler = logging.FileHandler(log_file, encoding="UTF-8", mode="w")
-    file_handler.setFormatter(logFormatter)
+    file_handler = None
+    
+    candidates = [log_file]
+    
+    # Add fallback with PID
+    head, tail = os.path.split(log_file)
+    root, ext = os.path.splitext(tail)
+    candidates.append(os.path.join(head, f"{root}_{os.getpid()}{ext}"))
+    
+    # Add fallback with PID and random number
+    import random
+    candidates.append(os.path.join(head, f"{root}_{os.getpid()}_{random.randint(0, 99999)}{ext}"))
+    
+    for candidate in candidates:
+        try:
+            file_handler = logging.FileHandler(candidate, encoding="UTF-8", mode="w")
+            break # Success!
+        except Exception:
+            pass # Try next candidate
+    
+    if file_handler:
+        file_handler.setFormatter(logFormatter)
 
     main_logger = logging.getLogger("thonny")
     contrib_logger = logging.getLogger("thonnycontrib")
@@ -275,7 +295,8 @@ def configure_logging(log_file, console_level=None):
     for logger in [main_logger, contrib_logger, minny_logger]:
         logger.setLevel(choose_logging_level())
         logger.propagate = False  # otherwise it will be also reported by IDE-s root logger
-        logger.addHandler(file_handler)
+        if file_handler:
+            logger.addHandler(file_handler)
 
     if console_level is not None:
         console_handler = logging.StreamHandler(sys.stdout)
@@ -296,13 +317,28 @@ def configure_logging(log_file, console_level=None):
     import faulthandler
     import signal
 
-    fault_out = open(
-        os.path.join(get_thonny_user_dir(), "frontend_faults.log"), mode="w", buffering=1
-    )
-    faulthandler.enable(fault_out)
-    if sys.platform != "win32":
-        faulthandler.register(signal.SIGUSR1, file=fault_out, all_threads=True)
-        # for getting traces of hung process, on macOS invoke  "kill -USR1 <pid>" and then "kill -USR2 <pid>"
+    fault_out = None
+    fault_log_path = os.path.join(get_thonny_user_dir(), "frontend_faults.log")
+    
+    candidates = [fault_log_path]
+    head, tail = os.path.split(fault_log_path)
+    root, ext = os.path.splitext(tail)
+    candidates.append(os.path.join(head, f"{root}_{os.getpid()}{ext}"))
+    import random
+    candidates.append(os.path.join(head, f"{root}_{os.getpid()}_{random.randint(0, 99999)}{ext}"))
+
+    for candidate in candidates:
+        try:
+            fault_out = open(candidate, mode="w", buffering=1)
+            break
+        except Exception:
+            pass
+
+    if fault_out:
+        faulthandler.enable(fault_out)
+        if sys.platform != "win32":
+            faulthandler.register(signal.SIGUSR1, file=fault_out, all_threads=True)
+            # for getting traces of hung process, on macOS invoke  "kill -USR1 <pid>" and then "kill -USR2 <pid>"
 
 
 def get_user_base_directory_for_plugins() -> str:

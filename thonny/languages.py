@@ -12,7 +12,6 @@ BASE_LANGUAGE_NAME = "Français [default]"
 LANGUAGES_DICT = {
     "en_GB": "English (UK)",
     BASE_LANGUAGE_CODE: BASE_LANGUAGE_NAME,
-    "fr_FR": "Français",
 }
 
 # how many spaces to add to button caption in order to make whole text visible

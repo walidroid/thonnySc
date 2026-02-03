@@ -5,6 +5,7 @@ import configparser
 import datetime
 import os.path
 import tkinter as tk
+import tempfile
 from configparser import ConfigParser
 from logging import exception, getLogger
 from typing import Any, Dict
@@ -162,18 +163,46 @@ class ConfigurationManager:
         # https://bitbucket.org/plas/thonny/issues/167/configuration-file-occasionally-gets
         # Now I'm saving the configuration to a temp file
         # and if the save is successful, I replace configuration file with it
-        temp_filename = self._filename + ".temp"
-        with open(temp_filename, "w", encoding="UTF-8") as fp:
-            self._ini.write(fp)
 
+        temp_filename = None
         try:
-            ConfigurationManager(temp_filename)
-            # temp file was created successfully
-            os.chmod(temp_filename, 0o600)
+            print("DEBUG: Saving configuration...")
+            logger.debug("Saving configuration to %s", self._filename)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="UTF-8",
+                dir=os.path.dirname(self._filename),
+                prefix=os.path.basename(self._filename) + ".temp.",
+                delete=False,
+            ) as fp:
+                self._ini.write(fp)
+                temp_filename = fp.name
+            
+            print(f"DEBUG: Temp file created: {temp_filename}")
+            # Atomic replace
+            try:
+                os.chmod(temp_filename, 0o600)
+            except Exception:
+                pass
+            
+            print("DEBUG: Replacing old config...")
             os.replace(temp_filename, self._filename)
-            os.chmod(self._filename, 0o600)
+            
+            try:
+                os.chmod(self._filename, 0o600)
+            except Exception:
+                pass
+            
+            print("DEBUG: Save complete")
+            logger.debug("Configuration saved successfully")
         except Exception:
-            exception("Could not save configuration file. Reverting to previous file.")
+            print("DEBUG: Save FAILED")
+            exception("Could not save configuration file.")
+            if temp_filename is not None and os.path.exists(temp_filename):
+                try:
+                    os.remove(temp_filename)
+                except Exception:
+                    pass
 
     def _parse_name(self, name):
         if "." in name:

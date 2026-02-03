@@ -11,7 +11,7 @@ def init_plugin():
     
     wb.bind("WorkbenchReady", on_ready)
     wb.bind("EditorTextCreated", on_editor_created)
-    print("✅ Plugin Snippets & Autoclose Intelligent chargé")
+    print("Plugin Snippets & Autoclose Intelligent charge")
 
 def on_ready(event):
     wb = get_workbench()
