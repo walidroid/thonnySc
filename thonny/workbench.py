@@ -3181,7 +3181,10 @@ class Workbench(tk.Tk):
         # A smoke test and a guard against forgetting to update one of the 2 places during release
         from importlib.metadata import version
 
-        installation_version = version("thonny")
+        try:
+            installation_version = version("thonny")
+        except Exception:
+            return
         embedded_version = thonny.get_version()
         if installation_version != embedded_version:
             messagebox.showwarning(
