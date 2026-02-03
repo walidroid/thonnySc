@@ -24,6 +24,11 @@ jobs:
         run: |
           $env:CI = "true"
           pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1
+      - name: Show Installed Packages
+        shell: powershell
+        run: |
+          & ".\Python\python.exe" -m pip list
+          Get-ChildItem -Path ".\Python\Lib\site-packages" | Select-Object -First 50 | ForEach-Object { $_.Name }
       - name: Validate Bundled Dependencies
         shell: powershell
         run: |

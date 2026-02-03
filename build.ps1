@@ -49,6 +49,8 @@ if (Test-Path "Python\Scripts\pip.exe") {
     Write-Host "Pip installed successfully" -ForegroundColor Green
 }
 
+& ".\Python\python.exe" -m pip install --upgrade pip wheel setuptools --no-warn-script-location
+
 # Step 2.5: Verify Qt Designer
 Write-Host "`n[2.5/5] Verifying Qt Designer..." -ForegroundColor Cyan
 
@@ -179,7 +181,7 @@ if ($LASTEXITCODE -eq 0) {
 
 if (Test-Path "requirements.txt") {
     Write-Host "`nInstalling requirements.txt..." -ForegroundColor Cyan
-    & ".\Python\python.exe" -m pip install -r requirements.txt --no-warn-script-location
+    & ".\Python\python.exe" -m pip install -r requirements.txt --no-warn-script-location --no-cache-dir --no-binary mypy
 }
 
 # Step 2.7: Clean up problematic plugins
