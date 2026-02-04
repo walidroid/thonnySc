@@ -7,6 +7,7 @@ esptool == 5.1.0
 pyserial == 3.5
 wheel == 0.45.1
 numpy == 2.4.0
+pyqt5_qt5_designer
 # thonny-palestine-flag  # Package doesn't exist on PyPI
 # thonny-tunisiaschools  # This is a local plugin, not on PyPI
 friendly-traceback

@@ -66,6 +66,15 @@ def find_qt_designer():
     import shutil
     import zipfile
     
+    # Check PATH using shutil.which
+    designer_qt5 = shutil.which("pyqt5_qt5_designer.exe")
+    if designer_qt5:
+        return designer_qt5
+    
+    designer_in_path = shutil.which("designer.exe")
+    if designer_in_path:
+        return designer_in_path
+
     # Check for bundled version first (if running as frozen app)
     if getattr(sys, 'frozen', False):
         app_dir = os.path.dirname(sys.executable)
@@ -107,16 +116,7 @@ def find_qt_designer():
     for loc in locations:
         if os.path.isfile(loc):
             return loc
-    
-    # Check PATH using shutil.which
-    designer_qt5 = shutil.which("pyqt5_qt5_designer.exe")
-    if designer_qt5:
-        return designer_qt5
-    
-    designer_in_path = shutil.which("designer.exe")
-    if designer_in_path:
-        return designer_in_path
-    
+            
     return None
 
 def open_in_designer():
@@ -134,13 +134,13 @@ def open_in_designer():
                 "Qt Designer n'a pas été trouvé sur cet ordinateur.\n\n"
                 "Pour installer Qt Designer:\n"
                 "1. Ouvrez le terminal (cmd)\n"
-                "2. Exécutez: pip install pyqt5-tools\n\n"
+                "2. Exécutez: pip install pyqt5_qt5_designer\n\n"
                 "Ou téléchargez depuis:\n"
                 "https://build-system.fman.io/qt-designer-download"
             )
         except:
             print("✗ Erreur: Qt Designer n'a pas été trouvé.")
-            print("  Veuillez installer: pip install pyqt5-tools")
+            print("  Veuillez installer: pip install pyqt5_qt5_designer")
         return False
     
     global qt_ui_file
