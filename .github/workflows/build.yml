@@ -19,11 +19,21 @@ jobs:
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup -y
+      - name: Generate Version
+        id: version
+        shell: powershell
+        run: |
+          $date = Get-Date -Format "yyyy.MM.dd"
+          $runNumber = $env:GITHUB_RUN_NUMBER
+          $version = "${date}.${runNumber}"
+          Write-Host "Generated version: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
       - name: Build
         shell: powershell
         run: |
           $env:CI = "true"
-          pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1
+          $version = "${{ steps.version.outputs.version }}"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File build.ps1 -Version $version
       - name: Show Installed Packages
         shell: powershell
         run: |
@@ -39,8 +49,8 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: ThonnySc-installer
+          name: ThonnySc-installer-${{ steps.version.outputs.version }}
           path: |
-            output\ThonnySc_v1.0.0.exe
+            output\ThonnySc_v${{ steps.version.outputs.version }}.exe
             dist\Thonny\**
           if-no-files-found: warn

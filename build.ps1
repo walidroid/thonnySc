@@ -1,7 +1,12 @@
+param (
+    [string]$Version = "1.0.0"
+)
+
 # ThonnySc Build Script
 # This script downloads Python embeddable package and builds the installer locally
 
 Write-Host "=== ThonnySc Build Script ===" -ForegroundColor Green
+Write-Host "Building version: $Version" -ForegroundColor Green
 Set-Location -Path $PSScriptRoot
 
 # Step 1: Download Python Embeddable Package
@@ -60,14 +65,38 @@ if (Test-Path $qtDesignerPath) {
     $qtSize = (Get-Item $qtDesignerPath).Length / 1MB
     Write-Host "Qt Designer found: $qtDesignerPath ($([math]::Round($qtSize, 2)) MB)" -ForegroundColor Green
 } else {
-    Write-Host "WARNING: Qt Designer not found!" -ForegroundColor Yellow
-    Write-Host "Download from: https://build-system.fman.io/qt-designer-download" -ForegroundColor Yellow
-    Write-Host "Extract to 'Qt Designer' folder in project root" -ForegroundColor Yellow
+    Write-Host "Qt Designer not found locally." -ForegroundColor Yellow
+    Write-Host "Attempting to download from GitHub release..." -ForegroundColor Cyan
     
-    $response = if ($env:CI -eq "true") { "y" } else { Read-Host "Continue without Qt Designer? (y/n)" }
-    if ($response -ne "y") {
-        Write-Host "Build cancelled. Please add Qt Designer and try again." -ForegroundColor Red
-        exit 1
+    try {
+        $downloadUrl = "https://github.com/walidroid/thonnySc/releases/download/qt-designer/qt-designer.zip"
+        Invoke-WebRequest $downloadUrl -Out "qt-designer.zip"
+        
+        Write-Host "Extracting Qt Designer..."
+        # Create directory if it doesn't exist (Expand-Archive usually does this but good to be safe)
+        if (-not (Test-Path "Qt Designer")) { New-Item -ItemType Directory -Path "Qt Designer" | Out-Null }
+        
+        Expand-Archive "qt-designer.zip" -DestinationPath "Qt Designer" -Force
+        Remove-Item "qt-designer.zip" -Force
+        
+        if (Test-Path $qtDesignerPath) {
+            Write-Host "Qt Designer downloaded and installed successfully" -ForegroundColor Green
+        } else {
+            throw "Extraction failed or designer.exe not found"
+        }
+    } catch {
+        Write-Host "Failed to download/install Qt Designer: $_" -ForegroundColor Red
+        if ($env:CI -eq "true") {
+            # In CI we might want to fail, or just warn if it's optional. 
+            # User said "integrated", so let's fail if it's missing in CI? 
+            # Or just warn. Let's warn for now to avoid breaking build if release is missing.
+            Write-Host "Continuing without Qt Designer..." -ForegroundColor Yellow
+        } else {
+             $response = Read-Host "Continue without Qt Designer? (y/n)"
+             if ($response -ne "y") {
+                exit 1
+             }
+        }
     }
 }
 
@@ -149,12 +178,25 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host "`nInstalling thonny-autosave and dependencies..."
 
 # Copy sched.py (missing from embeddable python)
-$hostSched = "C:\Users\Walid\AppData\Local\Programs\Python\Python313\Lib\sched.py"
-if (Test-Path $hostSched) {
-    Copy-Item $hostSched -Destination "Python\sched.py" -Force
-    Write-Host "Copied sched.py to bundled Python" -ForegroundColor Green
-} else {
-    Write-Host "Warning: Could not find host sched.py at $hostSched" -ForegroundColor Yellow
+try {
+    # Try to find sched.py using the python available in PATH (or the one running this script context)
+    $schedFile = python -c "import sched; print(sched.__file__)" 2>$null
+    
+    if ($schedFile -and (Test-Path $schedFile)) {
+        Copy-Item $schedFile -Destination "Python\sched.py" -Force
+        Write-Host "Copied sched.py from $schedFile" -ForegroundColor Green
+    } else {
+        # Fallback to a hardcoded path only if dynamic search fails
+        $hostSched = "C:\Users\Walid\AppData\Local\Programs\Python\Python313\Lib\sched.py"
+        if (Test-Path $hostSched) {
+            Copy-Item $hostSched -Destination "Python\sched.py" -Force
+            Write-Host "Copied sched.py from hardcoded path" -ForegroundColor Green
+        } else {
+             Write-Host "Warning: Could not locate sched.py dynamically or at hardcoded path." -ForegroundColor Yellow
+        }
+    }
+} catch {
+    Write-Host "Warning: Error while trying to locate sched.py: $_" -ForegroundColor Yellow
 }
 
 # Install the plugin (no-deps to avoid installing older Thonny version)
@@ -216,11 +258,11 @@ Write-Host "PyInstaller build completed" -ForegroundColor Green
 
 # Step 4: Build Installer
 Write-Host "`n[4/5] Building Installer with Inno Setup..." -ForegroundColor Cyan
-$version = "1.0.0"
+# Version is passed as parameter
 $innoPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
 if (Test-Path $innoPath) {
-    & $innoPath /DMyAppVersion=$version installer.iss
+    & $innoPath /DMyAppVersion=$Version installer.iss
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Installer created successfully!" -ForegroundColor Green
     } else {
@@ -236,12 +278,12 @@ if (Test-Path $innoPath) {
 # Step 5: Summary
 Write-Host "`n[5/5] Build Complete!" -ForegroundColor Green
 Write-Host "`nOutput:" -ForegroundColor Cyan
-if (Test-Path "output\ThonnySc_v$version.exe") {
-    $size = (Get-Item "output\ThonnySc_v$version.exe").Length / 1MB
-    Write-Host "  Installer: output\ThonnySc_v$version.exe ($([math]::Round($size, 2)) MB)" -ForegroundColor White
+if (Test-Path "output\ThonnySc_v$Version.exe") {
+    $size = (Get-Item "output\ThonnySc_v$Version.exe").Length / 1MB
+    Write-Host "  Installer: output\ThonnySc_v$Version.exe ($([math]::Round($size, 2)) MB)" -ForegroundColor White
 }
 
 Write-Host "`nNext steps:" -ForegroundColor Yellow
-Write-Host "  1. Test the installer: .\output\ThonnySc_v$version.exe"
+Write-Host "  1. Test the installer: .\output\ThonnySc_v$Version.exe"
 Write-Host "  2. Verify backend starts correctly"
 Write-Host "  3. Try opening and running Python files"
