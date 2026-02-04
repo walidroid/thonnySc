@@ -64,6 +64,7 @@ def add_pyqt_code():
 def find_qt_designer():
     """Find Qt Designer executable in common locations."""
     import shutil
+    import zipfile
     
     # Check for bundled version first (if running as frozen app)
     if getattr(sys, 'frozen', False):
@@ -71,6 +72,31 @@ def find_qt_designer():
         bundled_designer = os.path.join(app_dir, "Qt Designer", "designer.exe")
         if os.path.isfile(bundled_designer):
             return bundled_designer
+            
+    # Check project root (for development/portable versions)
+    # This file is in local_plugins/thonnycontrib/tunisiaschools/
+    # Root is 3 levels up: tunisiaschools -> thonnycontrib -> local_plugins -> thonnySc
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    
+    local_designer_dir = os.path.join(project_root, "Qt Designer")
+    local_designer_exe = os.path.join(local_designer_dir, "designer.exe")
+    
+    if os.path.isfile(local_designer_exe):
+        return local_designer_exe
+        
+    # Check for zip file in root if exe is missing
+    zip_path = os.path.join(project_root, "qt-designer.zip")
+    if os.path.isfile(zip_path):
+        try:
+            print(f"Extracting {zip_path}...")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(project_root)
+            
+            if os.path.isfile(local_designer_exe):
+                print("[OK] Extracted Qt Designer successfully")
+                return local_designer_exe
+        except Exception as e:
+            print(f"[ERROR] Failed to extract qt-designer.zip: {e}")
     
     # Try common install locations
     locations = [
