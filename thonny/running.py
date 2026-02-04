@@ -497,6 +497,9 @@ class Runner:
                 get_shell().print_error("Could not interrupt current process. ")
                 wait_instructions = "Please wait, try again or select Stop/Restart!"
 
+                if not self._proxy:
+                    return
+
                 if self._proxy.stop_restart_kills_user_program():
                     get_shell().print_error("Forcing the program to stop.\n")
                     self.cmd_stop_restart()
