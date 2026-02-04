@@ -10,7 +10,7 @@ class RuffProxy(LanguageServerProxy):
 
     def _create_server_process(self) -> subprocess.Popen[bytes]:
         return create_frontend_python_process(
-            ["-m", "ruff", "server", "--isolated"],
+            ["-m", "ruff", "server", "--isolated", "--config", "pyproject.toml"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
