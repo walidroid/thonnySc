@@ -8,6 +8,8 @@ esptool == 5.1.0
 pyserial == 3.5
 wheel == 0.45.1
 numpy == 2.4.0
+# Standalone Qt5 applications (includes Qt Designer with its own runtime)
+qt5_applications
 
 
 friendly-traceback

@@ -70,10 +70,10 @@ def find_qt_designer():
     if getattr(sys, 'frozen', False):
         app_dir = os.path.dirname(sys.executable)
         
-        # Check PySide6 bundled designer first (properly versioned)
-        pyside6_designer = os.path.join(app_dir, "Python", "Lib", "site-packages", "PySide6", "designer.exe")
-        if os.path.isfile(pyside6_designer):
-            return pyside6_designer
+        # Check qt5_applications standalone designer FIRST (ThonnyTN approach - no version mismatch)
+        qt5_apps_designer = os.path.join(app_dir, "Python", "Lib", "site-packages", "qt5_applications", "Qt", "bin", "designer.exe")
+        if os.path.isfile(qt5_apps_designer):
+            return qt5_apps_designer
         
         # Check PyQt5 bundled designer as fallback
         pyqt5_designer = os.path.join(app_dir, "Python", "Lib", "site-packages", "PyQt5", "Qt5", "bin", "designer.exe")
@@ -85,11 +85,7 @@ def find_qt_designer():
         if os.path.isfile(bundled_designer):
             return bundled_designer
     
-    # Check PATH - PySide6 designer first
-    pyside6_designer_path = shutil.which("pyside6-designer.exe")
-    if pyside6_designer_path:
-        return pyside6_designer_path
-    
+    # Check PATH - look for qt5_applications designer first
     designer_qt5 = shutil.which("pyqt5_qt5_designer.exe")
     if designer_qt5:
         return designer_qt5
