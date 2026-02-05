@@ -1,4 +1,4 @@
-import sched, time
+
 from thonny import get_workbench
 from thonny.languages import tr
 from logging import getLogger
