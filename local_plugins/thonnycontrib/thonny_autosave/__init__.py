@@ -41,5 +41,8 @@ def load_plugin():
         flag_name="general.autosave",
         handler=toggle_autosave
     )
+    print("DEBUG: thonny_autosave.load_plugin called")
     logger.info("Starting autosave loop")
     save_all()
+
+print("DEBUG: thonny_autosave module imported")
