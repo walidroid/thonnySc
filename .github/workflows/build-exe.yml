@@ -93,23 +93,23 @@ jobs:
           Write-Host "⚠ Warning: Ruff installation failed"
         }
         
-    - name: Install PyQt5 for Qt Designer
+    - name: Install PySide6 for Qt Designer
       run: |
-        Write-Host "Installing PyQt5 for .ui file loading..."
-        & ".\\Python\\python.exe" -m pip install PyQt5 --no-warn-script-location
+        Write-Host "Installing PySide6 for .ui file loading and Qt Designer..."
+        & ".\\Python\\python.exe" -m pip install PySide6 --no-warn-script-location
         
         if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ PyQt5 installed successfully"
+          Write-Host "✓ PySide6 installed successfully"
           
           # Verify installation
-          $pyqt5Check = & ".\\Python\\python.exe" -c "from PyQt5.uic import loadUi; print('OK')" 2>$null
-          if ($pyqt5Check -eq "OK") {
-            Write-Host "✓ PyQt5.uic verification successful"
+          $pyside6Check = & ".\\Python\\python.exe" -c "from PySide6.QtUiTools import QUiLoader; print('OK')" 2>$null
+          if ($pyside6Check -eq "OK") {
+            Write-Host "✓ PySide6 verification successful"
           } else {
-            Write-Host "⚠ Warning: PyQt5.uic verification failed"
+            Write-Host "⚠ Warning: PySide6 verification failed"
           }
         } else {
-          Write-Host "⚠ Warning: PyQt5 installation failed"
+          Write-Host "⚠ Warning: PySide6 installation failed"
         }
         
     - name: Install esptool for ESP32/ESP8266

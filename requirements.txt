@@ -8,9 +8,7 @@ esptool == 5.1.0
 pyserial == 3.5
 wheel == 0.45.1
 numpy == 2.4.0
-PyQt5==5.15.2
-PyQt5-Qt5==5.15.2
-PyQt5-sip==12.8.1
+
 
 friendly-traceback
 minny
