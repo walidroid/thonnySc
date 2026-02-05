@@ -145,20 +145,15 @@ def open_in_designer():
     
     global qt_ui_file
     try:
-        # Detach Qt Designer completely from Thonny to prevent I/O conflicts on save
-        creation_flags = subprocess.CREATE_NO_WINDOW
-        popen_kwargs = {
-            'stdin': subprocess.DEVNULL,
-            'stdout': subprocess.DEVNULL,
-            'stderr': subprocess.DEVNULL,
-            'creationflags': creation_flags,
-        }
-        
+        # Use os.startfile for true process independence (like double-clicking)
+        # This completely detaches Qt Designer from Thonny
         if qt_ui_file:
-            subprocess.Popen([designer_exe, qt_ui_file], **popen_kwargs)
+            # For opening with a file, we need to use the 'open' verb with the file
+            # and let Windows associate it with the designer, OR use subprocess with shell=True
+            os.startfile(qt_ui_file, 'open')
             print(f"✓ Ouvert {qt_ui_file} dans Qt Designer")
         else:
-            subprocess.Popen([designer_exe], **popen_kwargs)
+            os.startfile(designer_exe)
             print(f"✓ Qt Designer lancé")
         return True
     except Exception as e:
