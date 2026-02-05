@@ -148,6 +148,7 @@ jobs:
           }
         } else {
           Write-Host "⚠ Warning: minny installation failed"
+        }
         
     - name: Ensure sched.py exists
       run: |
@@ -160,7 +161,6 @@ jobs:
           Write-Host "✓ Copied sched.py to bundled Python"
         } else {
           Write-Host "⚠ Warning: Could not find host sched.py"
-        }
         }
         
 
@@ -230,6 +230,19 @@ jobs:
     - name: Build EXE with PyInstaller
       run: |
         pyinstaller thonny.spec
+        
+    - name: Copy local plugins to dist
+      run: |
+        # Ensure vendored plugins are in the distribution folder
+        Write-Host "Copying local plugins to dist/Thonny..."
+        if (Test-Path "local_plugins\thonnycontrib") {
+            $dest = "dist\Thonny\thonnycontrib"
+            if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+            Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest -Recurse -Force
+            Write-Host "✓ Copied local plugins to $dest"
+        } else {
+            Write-Host "⚠ Warning: local_plugins\thonnycontrib not found"
+        }
         
     - name: Install Inno Setup
       run: |

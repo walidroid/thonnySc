@@ -252,6 +252,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "PyInstaller build completed" -ForegroundColor Green
 
+# Post-Build: Copy local plugins to ensure they are present
+Write-Host "Copying local plugins to dist/Thonny..."
+if (Test-Path "local_plugins\thonnycontrib") {
+    $dest = "dist\Thonny\thonnycontrib"
+    if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
+    Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest -Recurse -Force
+    Write-Host "Copied local plugins to $dest" -ForegroundColor Green
+} else {
+    Write-Host "Warning: local_plugins\thonnycontrib not found" -ForegroundColor Yellow
+}
+
 # Step 4: Build Installer
 Write-Host "`n[4/5] Building Installer with Inno Setup..." -ForegroundColor Cyan
 # Version is passed as parameter
