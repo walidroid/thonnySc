@@ -66,6 +66,20 @@ def find_qt_designer():
     import shutil
     import zipfile
     
+    # Check for bundled version first (if running as frozen app)
+    if getattr(sys, 'frozen', False):
+        app_dir = os.path.dirname(sys.executable)
+        
+        # Check PyQt5 bundled designer (most reliable)
+        pyqt5_designer = os.path.join(app_dir, "Python", "Lib", "site-packages", "PyQt5", "Qt5", "bin", "designer.exe")
+        if os.path.isfile(pyqt5_designer):
+            return pyqt5_designer
+        
+        # Check dedicated Qt Designer folder
+        bundled_designer = os.path.join(app_dir, "Qt Designer", "designer.exe")
+        if os.path.isfile(bundled_designer):
+            return bundled_designer
+    
     # Check PATH using shutil.which
     designer_qt5 = shutil.which("pyqt5_qt5_designer.exe")
     if designer_qt5:
@@ -74,13 +88,6 @@ def find_qt_designer():
     designer_in_path = shutil.which("designer.exe")
     if designer_in_path:
         return designer_in_path
-
-    # Check for bundled version first (if running as frozen app)
-    if getattr(sys, 'frozen', False):
-        app_dir = os.path.dirname(sys.executable)
-        bundled_designer = os.path.join(app_dir, "Qt Designer", "designer.exe")
-        if os.path.isfile(bundled_designer):
-            return bundled_designer
             
     # Check project root (for development/portable versions)
     # This file is in local_plugins/thonnycontrib/tunisiaschools/
