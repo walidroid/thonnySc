@@ -397,6 +397,11 @@ class Workbench(tk.Tk):
             self.set_default("layout.notebook_" + nb_name + ".views", [])
             self.set_default("layout.notebook_" + nb_name + "_selected_view", None)
 
+        self.set_default("edit.automatic_calltips", True)
+        self.set_default("edit.automatic_completion_details", True)
+        self.set_default("edit.tab_request_completions_in_editors", True)
+        self.set_default("edit.tab_request_completions_in_shell", True)
+        
         self.update_debug_mode()
 
     def get_data_url(self, file_name) -> str:

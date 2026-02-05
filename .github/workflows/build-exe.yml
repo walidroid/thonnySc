@@ -148,6 +148,19 @@ jobs:
           }
         } else {
           Write-Host "⚠ Warning: minny installation failed"
+        
+    - name: Ensure sched.py exists
+      run: |
+        # Autosave plugin needs sched.py which is missing in embeddable python
+        $hostSched = python -c "import sched; print(sched.__file__)"
+        Write-Host "Found host sched.py at: $hostSched"
+        
+        if (Test-Path $hostSched) {
+          Copy-Item $hostSched -Destination "Python\sched.py" -Force
+          Write-Host "✓ Copied sched.py to bundled Python"
+        } else {
+          Write-Host "⚠ Warning: Could not find host sched.py"
+        }
         }
         
 
