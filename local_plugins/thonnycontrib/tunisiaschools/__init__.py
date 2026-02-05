@@ -146,7 +146,7 @@ def open_in_designer():
     global qt_ui_file
     try:
         # Detach Qt Designer completely from Thonny to prevent I/O conflicts on save
-        creation_flags = subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS
+        creation_flags = subprocess.CREATE_NO_WINDOW
         popen_kwargs = {
             'stdin': subprocess.DEVNULL,
             'stdout': subprocess.DEVNULL,
