@@ -202,21 +202,7 @@ try {
 # Install the plugin (no-deps to avoid installing older Thonny version)
 & ".\Python\python.exe" -m pip install thonny-autosave --no-deps --no-warn-script-location
 
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "thonny-autosave installed successfully" -ForegroundColor Green
-    
-    # Fix: Rename folder to use underscore so it can be imported
-    $badDir = "Python\Lib\site-packages\thonnycontrib\thonny-autosave"
-    $goodDir = "Python\Lib\site-packages\thonnycontrib\thonny_autosave"
-    
-    if (Test-Path $badDir) {
-        if (Test-Path $goodDir) { Remove-Item $goodDir -Recurse -Force }
-        Rename-Item $badDir "thonny_autosave"
-        Write-Host "Fixed thonny-autosave package name (renamed to thonny_autosave)" -ForegroundColor Green
-    }
-} else {
-    Write-Host "Warning: thonny-autosave installation failed" -ForegroundColor Yellow
-}
+
 
 $numpyTarget = "numpy"
 Write-Host "`nInstalling $numpyTarget..." -ForegroundColor Cyan

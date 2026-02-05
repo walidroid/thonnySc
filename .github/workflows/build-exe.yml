@@ -150,40 +150,7 @@ jobs:
           Write-Host "⚠ Warning: minny installation failed"
         }
         
-    - name: Install thonny-autosave Plugin
-      run: |
-        Write-Host "Installing thonny-autosave..."
-        
-        # 1. Copy sched.py from host python (GitHub Actions runner has python)
-        # We use the python on path (not the bundled one) to find sched.py
-        $hostSched = python -c "import sched; print(sched.__file__)"
-        Write-Host "Found host sched.py at: $hostSched"
-        
-        if (Test-Path $hostSched) {
-          Copy-Item $hostSched -Destination "Python\sched.py" -Force
-          Write-Host "✓ Copied sched.py to bundled Python"
-        } else {
-          Write-Host "⚠ Warning: Could not find host sched.py"
-        }
-        
-        # 2. Install plugin
-        & ".\\Python\\python.exe" -m pip install thonny-autosave --no-deps --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ thonny-autosave installed successfully"
-          
-          # Fix: Rename folder to use underscore so it can be imported
-          $badDir = "Python\Lib\site-packages\thonnycontrib\thonny-autosave"
-          $goodDir = "Python\Lib\site-packages\thonnycontrib\thonny_autosave"
-          
-          if (Test-Path $badDir) {
-              if (Test-Path $goodDir) { Remove-Item $goodDir -Recurse -Force }
-              Rename-Item $badDir "thonny_autosave"
-              Write-Host "✓ Fixed thonny-autosave package name (renamed to thonny_autosave)"
-          }
-        } else {
-          Write-Host "⚠ Warning: thonny-autosave installation failed"
-        }
+
         
     - name: Download Qt Designer
       run: |
