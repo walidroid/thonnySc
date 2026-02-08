@@ -49,10 +49,12 @@ Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs
 #endif
 
 [Icons]
-; Start Menu shortcut
+; Start Menu shortcuts
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-; Desktop shortcut - created automatically
+Name: "{group}\Qt Designer"; Filename: "{app}\Python\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"
+; Desktop shortcuts
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Python\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

@@ -60,6 +60,15 @@ a = Analysis(
         'thonnycontrib.thonny_autosave',
         'thonnycontrib.thonny_quick_switch',
         'pkg_resources.py2_warn',
+        # ESP32/ESP8266 MicroPython support
+        'esptool',
+        'esptool.cmds',
+        'esptool.targets',
+        'esptool.loader',
+        'serial',
+        'serial.tools',
+        'serial.tools.list_ports',
+        'serial.tools.list_ports_windows',
     ] + friendly_hiddenimports + thonny_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
