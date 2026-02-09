@@ -108,16 +108,6 @@ class MainCPythonBackend(MainBackend):
         execute_with_frontend_sys_path(self._load_plugins)
         report_time("After loading plugins")
         
-        # Install friendly-traceback for French error messages
-        try:
-            import friendly_traceback
-            friendly_traceback.install(lang="fr")
-            logger.info("friendly-traceback installed with French language")
-        except ImportError:
-            logger.warning("friendly-traceback not available")
-        except Exception as e:
-            logger.exception("Error installing friendly-traceback: %s", e)
-        
         if self._options.get("run.warn_module_shadowing", False):
             sys.addaudithook(self.import_audit_hook)
 
