@@ -316,6 +316,13 @@ class BareMetalMicroPythonProxy(MicroPythonProxy):
             "Starting background process (BareMetal), clean: %r, extra_args: %r", clean, extra_args
         )
 
+        # Check if port is configured
+        if self._port is None:
+            # Show user-friendly error message (translatable)
+            error_msg = tr("No device detected. Please connect your device and install drivers if needed.")
+            get_shell().print_error("\n" + error_msg + "\n")
+            raise RuntimeError(error_msg)
+
         # refresh the ports cache, so that the next uncached request (in BackendRestart handler)
         # is less likely to race with the back-end process trying to open a port and getting a
         # PermissionError (has happened in Windows)

@@ -1983,3 +1983,6 @@ msgstr "Avertir si un module personnalisé rend un module de bibliothèque inacc
 msgid "Search micropython-lib and PyPI"
 msgstr "Chercher micropython-lib et PyPI"
 
+#: thonny/plugins/micropython/mp_front.py:321
+msgid "No device detected. Please connect your device and install drivers if needed."
+msgstr "Aucun appareil détecté. Veuillez connecter votre appareil et installer les pilotes si nécessaire."
