@@ -601,9 +601,19 @@ class ESPFlashingDialog(BaseFlashingDialog):
 
 
 def try_launch_esptool_dialog(master, firmware_name: str):
+    import subprocess
+
+    interpreter = get_front_interpreter_for_subprocess()
     try:
-        import esptool
-    except ImportError:
+        result = subprocess.run(
+            [interpreter, "-c", "import esptool"],
+            capture_output=True, timeout=10
+        )
+        esptool_available = result.returncode == 0
+    except Exception:
+        esptool_available = False
+
+    if not esptool_available:
         messagebox.showerror(
             "Can't find esptool",
             "esptool not found.\n" + "Install it via 'Tools => Manage plug-ins'",
