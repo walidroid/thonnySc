@@ -25,7 +25,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 SetupIconFile=thonny\res\thonny.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-LicenseFile=license-for-win-installer.rtf
+LicenseFile=license-for-win-installer.txt
 
 [Languages]
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
@@ -58,3 +58,4 @@ Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Python\Lib\site-packages\qt5
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
