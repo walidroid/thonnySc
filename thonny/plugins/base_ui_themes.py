@@ -213,22 +213,6 @@ def clam() -> BasicUiThemeSettings:
                 "darkcolor": [("pressed", darker)],
             },
         },
-        "CustomToolbutton": {
-            "configure": {"background": frame, "activebackground": darker, "foreground": defaultfg}
-        },
-        "CustomNotebook": {
-            "configure": {
-                "bordercolor": darker,
-            }
-        },
-        "CustomNotebook.Tab": {
-            "configure": {
-                "background": darker,
-                "activebackground": frame,
-                "hoverbackground": frame,
-                "indicatorbackground": frame,
-            }
-        },
         "TCheckbutton": {
             "configure": {
                 "indicatorbackground": "#ffffff",
@@ -398,117 +382,77 @@ def vista() -> BasicUiThemeSettings:
 
 def aqua() -> BasicUiThemeSettings:
     # https://github.com/tcltk/tk/blob/main/library/ttk/aquaTheme.tcl
-    # https://github.com/tcltk/tk/blob/core-8-6-13/library/ttk/aquaTheme.tcl
     return {
         ".": {
             "configure": {
                 "font": "TkDefaultFont",
-                "background": "systemWindowBackgroundColor",
-                "foreground": "systemLabelColor",
-                "selectbackground": "systemSelectedTextBackgroundColor",
-                "selectforeground": "systemSelectedTextColor",
+                "background": "systemWindowBody",
+                "foreground": "systemModelessDialogActiveText",
+                "selectbackground": "systemHighlight",
+                "selectforeground": "systemModelessDialogActiveText",
                 "selectborderwidth": 0,
                 "insertwidth": 1,
                 "stipple": "",
-                "aqua_based": 1,
             },
             "map": {
                 "foreground": [
-                    ("disabled", "systemDisabledControlTextColor"),
-                    ("background", "systemLabelColor"),
+                    ("disabled", "systemModelessDialogInactiveText"),
+                    ("background", "systemModelessDialogInactiveText"),
                 ],
                 "selectbackground": [
-                    ("background", "systemSelectedTextBackgroundColor"),
-                    ("!focus", "systemSelectedTextBackgroundColor"),
+                    ("background", "systemHighlightSecondary"),
+                    ("!focus", "systemHighlightSecondary"),
                 ],
                 "selectforeground": [
-                    ("background", "systemSelectedTextColor"),
-                    ("!focus", "systemSelectedTextColor"),
+                    ("background", "systemModelessDialogInactiveText"),
+                    ("!focus", "systemDialogActiveText"),
                 ],
             },
         },
-        "TButton": {
-            "configure": {
-                "anchor": "center",
-                # "width": 6, # Present in 8.6.13
-                "foreground": "systemControlTextColor",
-            },
+        "TButton": {"configure": {"anchor": "center", "width": "6"}},
+        # "Toolbutton": {"configure": {"padding": 0}},
+        "Toolbutton": {
+            "configure": {"anchor": "center", "padding": scale(2), "relief": "flat"},
             "map": {
-                "foreground": [
-                    ("pressed", "white"),
-                    ("alternate", "!pressed", "!background", "white"),
-                    ("disabled", "systemDisabledControlTextColor"),
-                ]
+                "relief": [
+                    ("disabled", "flat"),
+                    ("selected", "sunken"),
+                    ("pressed", "sunken"),
+                    ("active", "raised"),
+                ],
+                "background": [("disabled", "gray"), ("pressed", "gray"), ("active", "gray")],
+                "lightcolor": [("pressed", "red")],
+                "darkcolor": [("pressed", "red")],
             },
-        },
-        "TMenubutton": {"configure": {"anchor": "center", "padding": [2, 0, 0, 2]}},
-        "Toolbutton": {"configure": {"anchor": "center"}},
-        "TEntry": {
-            "configure": {
-                "foreground": "systemTextColor",
-                "background": "systemTextBackgroundColor",
-            },
-            "map": {
-                "foreground": [("disabled", "systemDisabledControlTextColor")],
-                "selectbackground": [("!focus", "systemUnemphasizedSelectedTextBackgroundColor")],
-            },
-        },
-        "TCombobox": {
-            "configure": {
-                "postoffset": [
-                    5,
-                    -2,
-                    -10,
-                    0,
-                ]  # not present in version 8.6.13, but gives better size of the dropdown
-            },
-            "map": {
-                "foreground": [("disabled", "systemDisabledControlTextColor")],
-                "selectbackground": [("!focus", "systemUnemphasizedSelectedTextBackgroundColor")],
-            },
-        },
-        "TSpinbox": {
-            "configure": {
-                "foreground": "systemTextColor",
-                "background": "systemTextBackgroundColor",
-            },
-            "map": {
-                "foreground": [("disabled", "systemDisabledControlTextColor")],
-                "selectbackground": [("!focus", "systemUnemphasizedSelectedTextBackgroundColor")],
-            },
+            "layout": [
+                (
+                    "Toolbutton.padding",
+                    {"sticky": "nswe", "children": [("Toolbutton.label", {"sticky": "nswe"})]},
+                )
+            ],
         },
         "TNotebook": {
             "configure": {"tabmargins": [10, 0], "tabposition": "n", "padding": [18, 8, 18, 17]}
         },
-        "TNotebook.Tab": {
-            "configure": {"padding": [12, 3, 12, 2], "foreground": "systemControlTextColor"},
-            "map": {
-                "foreground": [
-                    ("background", "!selected", "systemControlTextColor"),
-                    ("background", "selected", "black"),
-                    ("!background", "selected", "systemSelectedTabTextColor"),
-                    ("disabled", "systemDisabledControlTextColor"),
-                ]
-            },
-        },
-        "Heading": {
-            "configure": {
-                "font": "TkHeadingFont",
-                "foreground": "systemTextColor",
-                "background": "systemWindowBackgroundColor",
-            }
-        },
+        "TNotebook.Tab": {"configure": {"padding": [12, 3, 12, 2]}},
+        "TCombobox": {"configure": {"postoffset": [5, -2, -10, 0]}},
+        "Heading": {"configure": {"font": "TkHeadingFont"}},
         "Treeview": {
-            "configure": {
-                "rowheight": 18,
-                "background": "systemTextBackgroundColor",
-                "stripedbackground": "systemDisabledControlTextColor",
-                "foreground": "systemTextColor",
-                "fieldbackground": "systemTextBackgroundColor",
+            "map": {
+                "background": [
+                    ("disabled", "systemDialogBackgroundInactive"),
+                    ("!disabled", "!selected", "systemWindowBody"),
+                    ("selected", "background", "systemHighlightSecondary"),
+                    ("selected", "systemHighlight"),
+                ],
+                "foreground": [
+                    ("disabled", "systemModelessDialogInactiveText"),
+                    ("!disabled", "!selected", "black"),
+                    ("selected", "systemModelessDialogActiveText"),
+                ],
             },
-            "map": {"background": [("selected", "systemSelectedTextBackgroundColor")]},
         },
-        "TProgressbar": {"configure": {"period": 100, "maxphase": 255}},  # maxphase 120 in 8.6.13
+        "TProgressbar": {"configure": {"period": 100, "maxphase": 255}},
         "Labelframe": {"configure": {"labeloutside": True, "labelmargins": [14, 0, 14, 4]}},
     }
 
@@ -559,7 +503,7 @@ def windows() -> CompoundUiThemeSettings:
                     "disabledforeground": "SystemGrayText",
                     "highlightbackground": "SystemActiveBorder",
                     "highlightcolor": "SystemActiveBorder",
-                    "highlightthickness": 0,
+                    "highlightthickness": scale(1),
                 }
             },
             "ViewBody.TFrame": {
@@ -586,29 +530,6 @@ def windows() -> CompoundUiThemeSettings:
                 }
             },
             "Inactive.ViewTab.TLabel": {"map": {"relief": [("hover", "raised")]}},
-            "CustomToolbutton": {
-                "configure": {
-                    "background": "systemButtonFace",
-                    "activebackground": "#dadada",
-                    "foreground": "SystemWindowText",
-                }
-            },
-            "CustomNotebook": {
-                "configure": {
-                    "bordercolor": "system3dLight",
-                }
-            },
-            "CustomNotebook.Tab": {
-                "configure": {
-                    "background": "systemButtonFace",
-                    "activebackground": "systemWindow",
-                    "hoverbackground": "systemWindow",
-                    #                    "indicatorbackground": "systemHighlight",
-                    "indicatorbackground": "system3dLight",
-                    "indicatorheight": 1,
-                }
-            },
-            "TextPanedWindow": {"configure": {"background": "systemWindow"}},
         },
     ]
 
@@ -656,7 +577,7 @@ def enhanced_clam() -> CompoundUiThemeSettings:
                     "disabledforeground": "#999999",
                     "highlightbackground": "#4a6984",
                     "highlightcolor": "#4a6984",
-                    "highlightthickness": 0,
+                    "highlightthickness": scale(1),
                 }
             },
             "ViewTab.TLabel": {"configure": {"padding": [scale(5), 0]}},
@@ -668,41 +589,18 @@ def enhanced_clam() -> CompoundUiThemeSettings:
                 }
             },
             "Inactive.ViewTab.TLabel": {"map": {"relief": [("hover", "raised")]}},
-            "TextPanedWindow": {"configure": {"background": "white"}},
         },
     ]
 
 
 def enhanced_aqua() -> CompoundUiThemeSettings:
     return [
+        _treeview_settings(),
         _menubutton_settings(),
         # _paned_window_settings(),
         _menu_settings(),
         {
-            "Tip.TLabel": {
-                "configure": {
-                    "background": "systemWindowBackgroundColor3",
-                    "foreground": "systemTextColor",
-                }
-            },
-            "Tip.TFrame": {"configure": {"background": "systemWindowBackgroundColor3"}},
-        },
-        {
-            "Text": {
-                "configure": {
-                    "background": "systemTextBackgroundColor",
-                    "foreground": "systemTextColor",
-                }
-            },
-            "Url.TLabel": {
-                "configure": {"foreground": "#003399"}
-            },  # will be overridden by enhanced_aqua_dark_overrides
-            "ViewToolbar.TFrame": {
-                "configure": {"background": "systemWindowBackgroundColor"}
-            },  # TODO:
-            "ViewToolbar.Toolbutton": {"configure": {"background": "systemWindowBackgroundColor"}},
             "TPanedWindow": {"configure": {"background": "systemDialogBackgroundActive"}},
-            "TextPanedWindow": {"configure": {"background": "systemTextBackgroundColor"}},
             "TFrame": {"configure": {"background": "systemDialogBackgroundActive"}},
             "ViewTab.TLabel": {"configure": {"padding": [scale(5), 0]}},
             "Tab": {"map": {"foreground": [("selected", "systemSelectedTabTextColor")]}},
@@ -714,58 +612,7 @@ def enhanced_aqua() -> CompoundUiThemeSettings:
                 }
             },
             "Inactive.ViewTab.TLabel": {"map": {"relief": [("hover", "raised")]}},
-            "TNotebook": {
-                "configure": {"tabmargins": [10, 0], "tabposition": "n", "padding": [0, 0, 0, 0]}
-            },
-            "CustomToolbutton": {
-                "configure": {
-                    "background": "systemWindowBackgroundColor",
-                    "activebackground": "systemWindowBackgroundColor3",
-                    "foreground": "systemLabelColor",
-                }
-            },
-            "CustomNotebook": {
-                "configure": {
-                    "bordercolor": "systemWindowBackgroundColor5",
-                }
-            },
-            "CustomNotebook.Tab": {
-                "configure": {
-                    "background": "systemWindowBackgroundColor",
-                    "activebackground": "systemWindowBackgroundColor",
-                    "hoverbackground": "systemWindowBackgroundColor3",
-                    "indicatorbackground": "systemWindowBackgroundColor",
-                    "dynamic_border": 1,
-                }
-            },
-            "Listbox": {
-                "configure": {
-                    "background": "SystemTextBackgroundColor",
-                    "foreground": "SystemTextColor",
-                    "selectbackground": "SystemSelectedTextBackgroundColor",
-                    "selectforeground": "SystemSelectedTextColor",
-                }
-            },
-            "TEntry": {
-                "map": {
-                    "background": [("readonly", "systemWindowBackgroundColor")],
-                },
-            },
-            "Heading": {"configure": {"topmost_pixels_to_hide": 2}},
-            "Vertical.TScrollbar": {
-                "configure": {
-                    "rightmost_pixels_to_hide": 1,
-                }
-            },
         },
-    ]
-
-
-def enhanced_aqua_dark_overrides():
-    return [
-        {
-            "Url.TLabel": {"configure": {"foreground": "#6699FF"}},
-        }
     ]
 
 
@@ -790,10 +637,11 @@ def load_plugin() -> None:
         "Enhanced Clam",
         "clam",
         enhanced_clam,
+        {"tab-close": "tab-close-clam", "tab-close-active": "tab-close-active-clam"},
     )
 
     if "vista" in original_themes:
         get_workbench().add_ui_theme("Windows", "vista", windows)
 
     if "aqua" in original_themes:
-        get_workbench().add_ui_theme("macOS", "aqua", enhanced_aqua, enhanced_aqua_dark_overrides)
+        get_workbench().add_ui_theme("Kind of Aqua", "aqua", enhanced_aqua)

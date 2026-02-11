@@ -35,25 +35,21 @@ if __name__ == "__main__":
                 file=sys.stderr,
             )
 
-    if not sys.version_info > (3, 9):
+    if not sys.version_info > (3, 8):
         print(
-            "This version of Thonny only supports Python 3.9 and later.\n"
+            "This version of Thonny only supports Python 3.8 and later.\n"
             + "Choose another interpreter from Tools => Options => Interpreter",
             file=sys.stderr,
         )
         sys.exit(1)
     import thonny
-
-    # Temporary compatibility measure for the breaking change introduced in version 5.0
-    thonny.THONNY_USER_DIR = thonny.get_thonny_user_dir()
-
     from thonny import report_time
 
     report_time("Before importing MainCPythonBackend")
     from thonny.common import PROCESS_ACK
     from thonny.plugins.cpython_backend.cp_back import MainCPythonBackend
 
-    thonny.prepare_thonny_user_dir()  # required when run on remote machine over SSH
+    thonny.prepare_thonny_user_dir()
     thonny.configure_backend_logging()
     print(PROCESS_ACK)
 

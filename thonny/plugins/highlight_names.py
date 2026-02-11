@@ -2,14 +2,12 @@ import time
 import tkinter as tk
 from logging import getLogger
 from tkinter import messagebox
-from typing import List, Union
 
-from thonny import get_runner, get_workbench, lsp_types
+from thonny import get_runner, get_workbench
 from thonny.codeview import SyntaxText
-from thonny.editor_helpers import get_cursor_ls_position
-from thonny.editors import Editor
+from thonny.common import InlineCommand
+from thonny.editor_helpers import get_text_filename
 from thonny.languages import tr
-from thonny.lsp_types import DocumentHighlightParams, LspResponse, TextDocumentIdentifier
 
 logger = getLogger(__name__)
 
@@ -18,6 +16,7 @@ class OccurrencesHighlighter:
     def __init__(self, text):
         self.text: SyntaxText = text
         self._request_scheduled: bool = False
+        get_workbench().bind("highlight_occurrences_response", self._handle_response, True)
 
     def get_positions_for(self, source, line, column):
         raise NotImplementedError()
@@ -65,57 +64,37 @@ class OccurrencesHighlighter:
 
     def _request(self):
         self._clear()
-
-        ls_proxy = get_workbench().get_main_language_server_proxy()
-        if ls_proxy is None:
+        row, column = map(int, self.text.index("insert").split("."))
+        runner = get_runner()
+        if not runner or runner.is_running():
             return
 
-        # Check if the server supports document highlight
-        caps = ls_proxy.server_capabilities
-        if caps is None or not caps.documentHighlightProvider:
-            return
-
-        ls_proxy.unbind_request_handler(self._handle_response)
-
-        pos = get_cursor_ls_position(self.text)
-        editor = self.text.master.master
-        assert isinstance(editor, Editor)
-
-        uri = editor.get_uri()
-        if uri is None:
-            return
-
-        import time, logging
-        t0 = time.perf_counter()
-        ls_proxy.request_document_highlight(
-            DocumentHighlightParams(textDocument=TextDocumentIdentifier(uri=uri), position=pos),
-            self._handle_response,
+        runner.send_command(
+            InlineCommand(
+                "highlight_occurrences",
+                filename=get_text_filename(self.text),
+                source=self.text.get("1.0", "end"),
+                row=row,
+                column=column,
+                text_last_operation_time=self.text.get_last_operation_time(),
+            )
         )
-        logging.warning("LSP HIGHLIGHT_REQ took %.2f ms", (time.perf_counter() - t0) * 1000)
 
-    def _handle_response(
-        self, response: LspResponse[Union[List[lsp_types.DocumentHighlight], None]]
-    ) -> None:
-        error = response.get_error()
+    def _handle_response(self, msg) -> None:
+        error = getattr(msg, "error", None)
         if error:
-            # Don't annoy user with an error popup for a background feature
-            logger.info("Error when querying document highlights: %s", str(error))
+            messagebox.showerror(tr("Error"), str(error), master=get_workbench())
             return
 
-        # TODO: check if the situation is still the same
-
-        result = response.get_result_or_raise()
-
-        if not result:
+        if msg.text_last_operation_time != self.text.get_last_operation_time():
+            # response arrived too late
             return
 
         try:
-            if len(result) > 1:
-                for ref in result:
-                    # TODO: UTF-16
-                    range = ref.range
-                    start_index = f"{range.start.line + 1}.{range.start.character}"
-                    end_index = f"{range.end.line + 1}.{range.end.character}"
+            if len(msg.references) > 1:
+                for ref in msg.references:
+                    start_index = f"{ref.row}.{ref.column}"
+                    end_index = f"{ref.row}.{ref.column + ref.length}"
                     self.text.tag_add("matched_name", start_index, end_index)
         except Exception as e:
             logger.exception("Problem when updating name highlighting", exc_info=e)

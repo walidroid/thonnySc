@@ -49,7 +49,7 @@ def clean(
             }
         },
         "ButtonNotebook.TNotebook": {"configure": {"bordercolor": frame_background}},
-        "ViewNotebook.TNotebook": {"configure": {"bordercolor": frame_background}},
+        "AutomaticNotebook.TNotebook": {"configure": {"bordercolor": frame_background}},
         "TNotebook.Tab": {
             "configure": {"background": frame_background, "bordercolor": normal_detail},
             "map": {
@@ -62,20 +62,6 @@ def clean(
                 "lightcolor": [("selected", normal_detail), ("!selected", frame_background)],
             },
         },
-        "CustomNotebook": {
-            "configure": {
-                "bordercolor": frame_background,
-            }
-        },
-        "CustomNotebook.Tab": {
-            "configure": {
-                "background": frame_background,
-                "activebackground": normal_detail,
-                "hoverbackground": normal_detail,
-                "indicatorbackground": normal_detail,
-            }
-        },
-        "TextPanedWindow": {"configure": {"background": text_background}},
         "Treeview": {
             "configure": {"background": text_background, "borderwidth": 0, "relief": "flat"},
             "map": {
@@ -226,18 +212,9 @@ def clean(
             "configure": {"background": frame_background},
             "map": {"background": [("disabled", frame_background), ("active", high_detail)]},
         },
-        "CustomToolbutton": {
-            "configure": {
-                "background": frame_background,
-                "activebackground": high_detail,
-                "foreground": normal_foreground,
-            }
-        },
         "TLabel": {"configure": {"foreground": normal_foreground}},
         "Url.TLabel": {"configure": {"foreground": normal_foreground}},
-        "Tip.TLabel": {
-            "configure": {"foreground": normal_foreground, "background": normal_foreground}
-        },
+        "Tip.TLabel": {"configure": {"foreground": normal_foreground, "background": low_detail}},
         "Tip.TFrame": {"configure": {"background": low_detail}},
         "TScale": {
             "configure": {
@@ -291,7 +268,7 @@ def clean(
                 "disabledforeground": low_foreground,
                 "highlightbackground": normal_detail,
                 "highlightcolor": high_detail,
-                "highlightthickness": 0,
+                "highlightthickness": 1,
             }
         },
         "Menubar": {
@@ -325,7 +302,7 @@ def clean(
 
 
 def load_plugin() -> None:
-    dark_images = {"tab-close-active": "tab-close-active-dark"}
+    dark_images = {"tab-close-active": "tab-close-active-clam-dark"}
 
     get_workbench().add_ui_theme(
         "Clean Dark",
@@ -340,7 +317,7 @@ def load_plugin() -> None:
             high_foreground="#eeeeee",
             low_foreground="#666666",
         ),
-        images=dark_images,
+        dark_images,
     )
 
     dark_tip_background = ("#b8c28d",)
@@ -358,7 +335,7 @@ def load_plugin() -> None:
             high_foreground="#eeeeee",
             low_foreground="#5a725b",
         ),
-        images=dark_images,
+        dark_images,
     )
 
     get_workbench().add_ui_theme(
@@ -374,7 +351,7 @@ def load_plugin() -> None:
             high_foreground="#eeeeee",
             low_foreground="#5a5c72",
         ),
-        images=dark_images,
+        dark_images,
     )
 
     get_workbench().add_ui_theme(

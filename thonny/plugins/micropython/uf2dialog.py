@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from thonny import get_workbench
 from thonny.common import UserError
-from thonny.languages import tr
 from thonny.misc_utils import get_win_volume_name, list_volumes
 from thonny.plugins.micropython.base_flashing_dialog import (
     BaseFlashingDialog,
@@ -20,7 +19,7 @@ logger = getLogger(__name__)
 
 class Uf2FlashingDialog(BaseFlashingDialog):
     def get_target_label(self) -> str:
-        return tr("Target volume")
+        return "Target volume"
 
     def get_variants_url(self) -> str:
         return get_workbench().get_data_url(f"{self.firmware_name.lower()}-variants-uf2.json")
@@ -124,23 +123,20 @@ class Uf2FlashingDialog(BaseFlashingDialog):
 
     def get_instructions(self) -> Optional[str]:
         return (
-            tr(
-                "Here you can install or update %s for devices having an UF2 bootloader\n"
-                "(this includes most boards meant for beginners).\n"
-                "\n"
-                "1. Put your device into bootloader mode: \n"
-                "     - some devices have to be plugged in while holding the BOOTSEL button,\n"
-                "     - some require double-tapping the RESET button with proper rhythm.\n"
-                "2. Wait for couple of seconds until the target volume appears.\n"
-                "3. Select desired variant and version.\n"
-                "4. Click 'Install' and wait for some seconds until done.\n"
-                "5. Close the dialog and start programming!"
-            )
-            % self.firmware_name
+            f"Here you can install or update {self.firmware_name} for devices having an UF2 bootloader\n"
+            "(this includes most boards meant for beginners).\n"
+            "\n"
+            "1. Put your device into bootloader mode: \n"
+            "     - some devices have to be plugged in while holding the BOOTSEL button,\n"
+            "     - some require double-tapping the RESET button with proper rythm.\n"
+            "2. Wait for couple of seconds until the target volume appears.\n"
+            "3. Select desired variant and version.\n"
+            "4. Click 'Install' and wait for some seconds until done.\n"
+            "5. Close the dialog and start programming!"
         )
 
     def get_title(self):
-        return tr("Install or update %s (UF2)") % self.firmware_name
+        return f"Install or update {self.firmware_name} (UF2)"
 
     def perform_core_operation(
         self,
@@ -215,13 +211,9 @@ class Uf2FlashingDialog(BaseFlashingDialog):
             new_ports = list_serial_ports_with_hw_info()
             added_ports = set(new_ports) - set(old_ports)
             if added_ports:
-                for port_tuple in added_ports:
-                    self.append_text("Found port %s (%s)\n" % port_tuple)
+                for p in added_ports:
+                    self.append_text("Found port %s\n" % p)
                     self.set_action_text("Found port")
-
-                if len(added_ports) == 1:
-                    self.new_port, _ = added_ports.pop()
-
                 return
             if self._state == "cancelling":
                 return
@@ -247,12 +239,11 @@ def find_uf2_property(lines: List[str], prop_name: str) -> Optional[str]:
     return None
 
 
-def show_uf2_installer(master, firmware_name: str) -> Optional[str]:
+def show_uf2_installer(master, firmware_name: str) -> None:
     dlg = Uf2FlashingDialog(master, firmware_name=firmware_name)
     from thonny import ui_utils
 
     ui_utils.show_dialog(dlg)
-    return dlg.new_port
 
 
 def uf2_device_is_present_in_bootloader_mode() -> bool:
@@ -282,4 +273,4 @@ def create_volume_description(path: str) -> str:
 
 
 def list_serial_ports_with_hw_info():
-    return [(p.device, p.hwid) for p in list_serial_ports(max_cache_age=0)]
+    return [f"{p.device} ({p.hwid})" for p in list_serial_ports(max_cache_age=0)]

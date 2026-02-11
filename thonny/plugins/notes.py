@@ -1,6 +1,6 @@
 import os.path
 
-from thonny import get_thonny_user_dir, get_workbench, ui_utils
+from thonny import THONNY_USER_DIR, get_workbench, ui_utils
 from thonny.languages import tr
 from thonny.tktextext import EnhancedText, TextFrame
 from thonny.ui_utils import TextMenu
@@ -8,17 +8,7 @@ from thonny.ui_utils import TextMenu
 
 class NotesText(EnhancedText):
     def __init__(self, master, **kw):
-        indent_width = get_workbench().get_option("edit.indent_width")
-        tab_width = get_workbench().get_option("edit.tab_width")
-        EnhancedText.__init__(
-            self,
-            master=master,
-            indent_width=indent_width,
-            tab_width=tab_width,
-            wrap="word",
-            undo=True,
-            **kw,
-        )
+        EnhancedText.__init__(self, master=master, wrap="word", undo=True, **kw)
         self.context_menu = TextMenu(self)
 
     def on_secondary_click(self, event=None):
@@ -28,7 +18,7 @@ class NotesText(EnhancedText):
 
 class NotesView(TextFrame):
     def __init__(self, master):
-        self.filename = os.path.join(get_thonny_user_dir(), "user_notes.txt")
+        self.filename = os.path.join(THONNY_USER_DIR, "user_notes.txt")
         super().__init__(
             master, text_class=NotesText, horizontal_scrollbar_class=ui_utils.AutoScrollbar
         )

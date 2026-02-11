@@ -2,9 +2,7 @@
 import ast
 import collections
 import importlib
-import json
 import os.path
-import pathlib
 import pkgutil
 import platform
 import queue
@@ -12,7 +10,6 @@ import re
 import shutil
 import socket
 import sys
-import tkinter
 import tkinter as tk
 import tkinter.font as tk_font
 import traceback
@@ -25,10 +22,10 @@ from warnings import warn
 
 import thonny
 from thonny import (
+    THONNY_USER_DIR,
     assistance,
     get_runner,
     get_shell,
-    get_thonny_user_dir,
     is_portable,
     languages,
     ui_utils,
@@ -36,56 +33,21 @@ from thonny import (
 from thonny.common import Record, UserError, normpath_with_actual_case
 from thonny.config import try_load_configuration
 from thonny.config_ui import ConfigurationDialog
-from thonny.custom_notebook import CustomNotebook, CustomNotebookPage
-from thonny.editors import Editor, EditorNotebook
+from thonny.editors import EditorNotebook, is_local_path
 from thonny.languages import tr
-from thonny.lsp_proxy import LanguageServerProxy
-from thonny.lsp_types import (
-    ClientCapabilities,
-    ClientInfo,
-    CompletionClientCapabilities,
-    CompletionClientCapabilitiesCompletionItem,
-    CompletionClientCapabilitiesCompletionList,
-    DefinitionClientCapabilities,
-    DiagnosticWorkspaceClientCapabilities,
-    DocumentHighlightClientCapabilities,
-    DocumentSymbolClientCapabilities,
-    GeneralClientCapabilities,
-    InitializeParams,
-    LspResponse,
-    MarkupKind,
-    PositionEncodingKind,
-    PublishDiagnosticsClientCapabilities,
-    SignatureHelpClientCapabilities,
-    SignatureHelpClientCapabilitiesParameterInformation,
-    SignatureHelpClientCapabilitiesSignatureInformation,
-    SymbolKind,
-    SymbolKinds,
-    TextDocumentClientCapabilities,
-    TextDocumentSyncClientCapabilities,
-    TraceValues,
-    WindowClientCapabilities,
-    WorkspaceClientCapabilities,
-    WorkspaceFolder,
-)
 from thonny.misc_utils import (
     copy_to_clipboard,
     get_menu_char,
-    is_editor_supported_uri,
-    is_local_project_dir,
     running_on_linux,
     running_on_mac_os,
     running_on_rpi,
     running_on_windows,
-    uri_to_legacy_filename,
 )
-from thonny.program_analysis import ProgramAnalyzer
 from thonny.running import BackendProxy, Runner
 from thonny.shell import ShellView
 from thonny.ui_utils import (
-    CustomToolbutton,
-    ViewNotebook,
-    WorkbenchPanedWindow,
+    AutomaticNotebook,
+    AutomaticPanedWindow,
     caps_lock_is_on,
     create_action_label,
     create_tooltip,
@@ -93,15 +55,11 @@ from thonny.ui_utils import (
     get_hyperlink_cursor,
     get_style_configuration,
     lookup_style_option,
-    os_is_in_dark_mode,
     register_latin_shortcut,
     select_sequence,
     sequence_to_accelerator,
-    set_windows_titlebar_darkness,
     shift_is_pressed,
 )
-
-VIEW_LOCATION_CODES = ["nw", "w", "sw", "s", "se", "e", "ne"]
 
 logger = getLogger(__name__)
 
@@ -157,25 +115,17 @@ class Workbench(tk.Tk):
 
     """
 
-    def __init__(self, parsed_args: Dict[str, Any]) -> None:
+    def __init__(self) -> None:
         logger.info("Starting Workbench")
         thonny._workbench = self
-        self._initial_args = parsed_args
-        self._have_seen_visibility_events = False
         self.ready = False
         self._closing = False
         self._destroyed = False
         self._lost_focus = False
         self._is_portable = is_portable()
-        self._event_queue = queue.Queue()  # Can be appended to by threads
-        self._event_polling_id = None
-        self._ls_proxies: List[LanguageServerProxy] = []
         self.initializing = True
 
-        self._secrets: Dict[str, str] = {}
-
         self._init_configuration()
-        self._load_secrets()
         self._tweak_environment()
         self._check_init_server_loop()
 
@@ -194,21 +144,15 @@ class Workbench(tk.Tk):
         )  # type: Dict[str, Dict[str, str]] # theme-based alternative images
         self._current_theme_name = "clam"  # will be overwritten later
         self._backends = {}  # type: Dict[str, BackendSpec]
-        self._language_server_proxy_classes: List[Type[LanguageServerProxy]] = []
-        self.assistants: Dict[str, assistance.Assistant] = {}
         self._commands = []  # type: List[Dict[str, Any]]
-        self._notebook_drop_targets: List[tk.Widget] = []
         self._toolbar_buttons = {}
         self._view_records = {}  # type: Dict[str, Dict[str, Any]]
         self.content_inspector_classes = []  # type: List[Type]
-        self.program_analyzers: Dict[str, ProgramAnalyzer] = {}
         self._latin_shortcuts = {}  # type: Dict[Tuple[int,int], List[Tuple[Callable, Callable]]]
-        self._os_dark_mode = os_is_in_dark_mode()
+
         self._init_language()
 
         self._active_ui_mode = os.environ.get("THONNY_MODE", self.get_option("general.ui_mode"))
-        if self._active_ui_mode == "expert":  # not used since 5.0
-            self._active_ui_mode = "regular"
 
         self._init_scaling()
 
@@ -240,19 +184,20 @@ class Workbench(tk.Tk):
         self._init_program_arguments_frame()
         self._init_regular_mode_link()  # TODO:
 
-        # Need to register opened handler before opening views
-        self.bind("NotebookPageOpened", self._notebook_page_opened, True)
-        self.bind("NotebookPageClosed", self._notebook_page_closed, True)
-        self.bind("NotebookPageMoved", self._notebook_page_moved, True)
-
         self._show_views()
         # Make sure ShellView is loaded
         get_shell()
 
         self._init_commands()
         self._init_icon()
+        try:
+            self._editor_notebook.load_startup_files()
+        except Exception:
+            self.report_exception()
+
+        self._editor_notebook.focus_set()
         logger.info("Opening views")
-        self._try_action(self._restore_selected_views)
+        self._try_action(self._open_views)
 
         self.bind_class("EditorCodeViewText", "<<CursorMove>>", self.update_title, True)
         self.bind_class("EditorCodeViewText", "<<Modified>>", self.update_title, True)
@@ -260,12 +205,9 @@ class Workbench(tk.Tk):
         self.get_editor_notebook().bind("<<NotebookTabChanged>>", self.update_title, True)
         self.get_editor_notebook().bind("<<NotebookTabChanged>>", self._update_toolbar, True)
         self.bind_all("<KeyPress>", self._on_all_key_presses, True)
-        self.bind("<Control-Tab>", self.select_another_tab, True)
-        self.bind("<<ControlTabInText>>", self.select_another_tab, True)
         self.bind("<FocusOut>", self._on_focus_out, True)
         self.bind("<FocusIn>", self._on_focus_in, True)
         self.bind("BackendRestart", self._on_backend_restart, True)
-        self.bind("BackendTerminated", self._on_backend_terminated, True)
 
         self._publish_commands()
         self.initializing = False
@@ -283,75 +225,22 @@ class Workbench(tk.Tk):
             ):
                 print(name)
         """
-        self.bind("<Visibility>", self._on_visibility, True)
-        self.become_active_window()
+
         self.after(1, self._start_runner)  # Show UI already before waiting for the backend to start
+        self.after_idle(self.advertise_ready)
 
-    def _on_visibility(self, event):
-        if not self._have_seen_visibility_events:
-            self._have_seen_visibility_events = True
-            logger.info("First <Visibility> event")
-            self.update_idletasks()
-            self.after_idle(self.finalize_startup)
-
-    def finalize_startup(self):
-        logger.info("Finalizing startup")
-        try:
-            self.ready = True
-            self._editor_notebook.update_appearance()
-            if self._configuration_manager.error_reading_existing_file:
-                messagebox.showerror(
-                    "Problem",
-                    f"Previous configuration could not be read:\n\n"
-                    f"{self._configuration_manager.error_reading_existing_file}).\n\n"
-                    "Using default settings",
-                    master=self,
-                )
-            self._editor_notebook.load_previous_files()
-            self._load_stuff_from_command_line(self._initial_args)
-            self._editor_notebook.focus_set()
-            self.event_generate("WorkbenchReady")
-            self.poll_events()
-            self._check_version_alignment()
-        except Exception:
-            logger.exception("Exception while finalizing startup")
-            self.report_exception()
-
-    def poll_events(self) -> None:
-        if self._event_queue is None or self._closing:
-            self._event_polling_id = None
-            return
-
-        while not self._event_queue.empty():
-            sequence, event = self._event_queue.get()
-            self.event_generate(sequence, event)
-
-        self._event_polling_id = self.after(20, self.poll_events)
-
-    def get_profile(self) -> str:
-        return self._initial_args.get("profile", "default")
-
-    def _load_stuff_from_command_line(self, parsed_args: Dict[str, Any]) -> None:
-        logger.info("Processing arguments %r", parsed_args)
-        try:
-            for file in parsed_args["files"]:
-                if not os.path.isabs(file):
-                    file = os.path.join(parsed_args["cwd"], file)
-                self._editor_notebook.show_file(file)
-
-            replayer_file = parsed_args["replayer"]
-            # NB! replayer_file may be empty string
-            if replayer_file is not None:
-                replayer_file = replayer_file.strip() or None
-                if replayer_file is not None and not os.path.isabs(replayer_file):
-                    replayer_file = os.path.join(parsed_args["cwd"], replayer_file)
-
-                from thonny.plugins import replayer
-
-                replayer.open_replayer(replayer_file)
-
-        except Exception:
-            self.report_exception()
+    def advertise_ready(self):
+        self.ready = True
+        self.event_generate("WorkbenchReady")
+        self._editor_notebook.update_appearance()
+        if self._configuration_manager.error_reading_existing_file:
+            messagebox.showerror(
+                "Problem",
+                f"Previous configuration could not be read:\n\n"
+                f"{self._configuration_manager.error_reading_existing_file}).\n\n"
+                "Using default settings",
+                master=self,
+            )
 
     def _make_sanity_checks(self):
         home_dir = os.path.expanduser("~")
@@ -374,7 +263,7 @@ class Workbench(tk.Tk):
             self.report_exception()
 
     def _init_configuration(self) -> None:
-        self._configuration_manager = try_load_configuration(thonny.get_configuration_file())
+        self._configuration_manager = try_load_configuration(thonny.CONFIGURATION_FILE)
         self._configuration_pages = []  # type: List[Tuple[str, str, Type[tk.Widget], int]]
 
         self.set_default("general.single_instance", thonny.SINGLE_INSTANCE_DEFAULT)
@@ -386,40 +275,15 @@ class Workbench(tk.Tk):
         self.set_default("general.font_scaling_mode", "default")
         self.set_default("general.environment", [])
         self.set_default("general.large_icon_rowheight_threshold", 32)
-        self.set_default("file.use_zenity", False)
+        self.set_default("file.avoid_zenity", False)
         self.set_default("run.working_directory", os.path.expanduser("~"))
         self.set_default(
             "general.data_url_prefix", "https://raw.githubusercontent.com/thonny/thonny/master/data"
         )
-
-        self.set_default("layout.visible_views", [])
-        for nb_name in VIEW_LOCATION_CODES:
-            self.set_default("layout.notebook_" + nb_name + ".views", [])
-            self.set_default("layout.notebook_" + nb_name + "_selected_view", None)
-
-        self.set_default("edit.automatic_calltips", True)
-        self.set_default("edit.automatic_completion_details", True)
-        self.set_default("edit.tab_request_completions_in_editors", True)
-        self.set_default("edit.tab_request_completions_in_shell", True)
-        
         self.update_debug_mode()
 
     def get_data_url(self, file_name) -> str:
         return self.get_option("general.data_url_prefix") + "/" + file_name
-
-    def _get_secrets_path(self) -> str:
-        return os.path.join(get_thonny_user_dir(), "secrets.json")
-
-    def _load_secrets(self):
-        if os.path.isfile(self._get_secrets_path()):
-            with open(self._get_secrets_path(), "r") as f:
-                self._secrets = json.load(f)
-        else:
-            self._secrets = {}
-
-    def _save_secrets(self):
-        with open(self._get_secrets_path(), "wt") as f:
-            json.dump(self._secrets, f)
 
     def _tweak_environment(self):
         for entry in self.get_option("general.environment"):
@@ -432,114 +296,6 @@ class Workbench(tk.Tk):
     def update_debug_mode(self):
         os.environ["THONNY_DEBUG"] = str(self.get_option("general.debug_mode", False))
         thonny.set_logging_level()
-
-    def get_main_language_server_proxy(self) -> Optional[LanguageServerProxy]:
-        if self._ls_proxies:
-            return self._ls_proxies[0]
-        return None
-
-    def get_initialized_ls_proxies(self) -> List[LanguageServerProxy]:
-        return [ls_proxy for ls_proxy in self._ls_proxies if ls_proxy.is_initialized()]
-
-    def start_or_restart_language_servers(self) -> None:
-        self.shut_down_language_servers()
-
-        for class_ in self._language_server_proxy_classes:
-            try:
-                logger.info("Constructing language server %s", class_)
-                ls_proxy = class_(
-                    InitializeParams(
-                        capabilities=ClientCapabilities(
-                            workspace=WorkspaceClientCapabilities(
-                                applyEdit=None,
-                                codeLens=None,
-                                fileOperations=None,
-                                inlineValue=None,
-                                inlayHint=None,
-                                diagnostics=None,
-                                # workspaceFolders=True, # TODO: This may require workspace/didChangeWorkspaceFolders to activate Pyright?
-                            ),
-                            textDocument=TextDocumentClientCapabilities(
-                                publishDiagnostics=PublishDiagnosticsClientCapabilities(
-                                    relatedInformation=False
-                                ),
-                                synchronization=TextDocumentSyncClientCapabilities(),
-                                documentSymbol=DocumentSymbolClientCapabilities(
-                                    symbolKind=SymbolKinds(
-                                        [
-                                            SymbolKind.Enum,
-                                            SymbolKind.Class,
-                                            SymbolKind.Method,
-                                            SymbolKind.Property,
-                                            SymbolKind.Function,
-                                        ]
-                                    ),
-                                    hierarchicalDocumentSymbolSupport=True,
-                                ),
-                                completion=CompletionClientCapabilities(
-                                    completionItem=CompletionClientCapabilitiesCompletionItem(
-                                        snippetSupport=False,
-                                        commitCharactersSupport=True,
-                                        documentationFormat=None,  # TODO
-                                        deprecatedSupport=False,  # TODO
-                                        preselectSupport=True,
-                                        insertReplaceSupport=True,
-                                        labelDetailsSupport=False,
-                                    ),
-                                    completionItemKind=None,  # TODO
-                                    insertTextMode=None,
-                                    contextSupport=False,
-                                    completionList=CompletionClientCapabilitiesCompletionList(
-                                        itemDefaults=["commitCharacters"]
-                                    ),
-                                ),
-                                signatureHelp=SignatureHelpClientCapabilities(
-                                    signatureInformation=SignatureHelpClientCapabilitiesSignatureInformation(
-                                        documentationFormat=[MarkupKind.PlainText, MarkupKind.Markdown],
-                                        parameterInformation=SignatureHelpClientCapabilitiesParameterInformation(
-                                            labelOffsetSupport=True
-                                        ),
-                                        activeParameterSupport=True,
-                                    )
-                                ),
-                                definition=DefinitionClientCapabilities(linkSupport=True),
-                                documentHighlight=DocumentHighlightClientCapabilities(),
-                            ),
-                            notebookDocument=None,
-                            window=WindowClientCapabilities(
-                                workDoneProgress=None,
-                                showMessage=None,
-                                showDocument=None,
-                            ),
-                            general=GeneralClientCapabilities(
-                                staleRequestSupport=None,
-                                regularExpressions=None,
-                                markdown=None,
-                                positionEncodings=[PositionEncodingKind.UTF16],
-                            ),
-                        ),
-                        processId=os.getpid(),
-                        clientInfo=ClientInfo(name="Thonny", version=thonny.get_version()),
-                        locale=self.get_option("general.language"),
-                        workspaceFolders=[
-                            WorkspaceFolder(
-                                uri=pathlib.Path(self.get_local_cwd()).as_uri(), name="localws"
-                            ),
-                        ],
-                        trace=TraceValues.Verbose if self.in_debug_mode() else TraceValues.Messages,
-                    )
-                )
-
-                self._ls_proxies.append(ls_proxy)
-            except Exception:
-                logger.exception("Failed to construct language server %s", class_)
-
-    def shut_down_language_servers(self):
-        for ls_proxy in self._ls_proxies:
-            logger.info("Shutting down language server %s", ls_proxy)
-            ls_proxy.shut_down()
-
-        self._ls_proxies = []
 
     def _init_language(self) -> None:
         """Initialize language."""
@@ -561,13 +317,15 @@ class Workbench(tk.Tk):
         self.set_default("layout.e_width", 200)
         self.set_default("layout.s_height", 200)
 
-        # I don't actually need saved options for Full screen,
+        # I don't actually need saved options for Full screen/maximize view,
         # but it's easier to create menu items, if I use configuration manager's variables
         self.set_default("view.full_screen", False)
+        self.set_default("view.maximize_view", False)
 
         # In order to avoid confusion set these settings to False
         # even if they were True when Thonny was last run
         self.set_option("view.full_screen", False)
+        self.set_option("view.maximize_view", False)
 
         self.geometry(
             "{0}x{1}+{2}+{3}".format(
@@ -582,6 +340,7 @@ class Workbench(tk.Tk):
             ui_utils.set_zoomed(self, True)
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.bind("<Configure>", self._on_configure, True)
 
     def _init_icon(self) -> None:
         # Window icons
@@ -635,12 +394,6 @@ class Workbench(tk.Tk):
         # 3rd party plugins from namespace package
         # Now it's time to add plugins dir to sys path
         sys.path.append(thonny.get_sys_path_directory_containg_plugins())
-        
-        # Also add local_plugins folder if it exists (for bundled plugins)
-        local_plugins_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "local_plugins")
-        if os.path.isdir(local_plugins_dir) and local_plugins_dir not in sys.path:
-            sys.path.insert(0, local_plugins_dir)
-        
         try:
             import thonnycontrib  # @UnresolvedImport
         except ImportError:
@@ -669,12 +422,8 @@ class Workbench(tk.Tk):
             return getattr(m, "load_order_key", m.__name__)
 
         for m in sorted(modules, key=module_sort_key):
-            logger.debug("Loading plugin %r from file %r", m.__name__, m.__file__)
-            try:
-                getattr(m, load_function_name)()
-            except Exception:
-                logger.exception("Could not load plugin")
-                self.report_exception("Coult not load plugin " + m.__name__)
+            logger.debug("Loading %r", m.__file__)
+            getattr(m, load_function_name)()
 
     def _init_fonts(self) -> None:
         # set up editor and shell fonts
@@ -710,12 +459,6 @@ class Workbench(tk.Tk):
 
         small_link_ratio = 0.8 if running_on_windows() else 0.7
         self._fonts = [
-            tk_font.Font(
-                name="LinkFont",
-                family=default_font.cget("family"),
-                size=int(default_font.cget("size")),
-                underline=True,
-            ),
             tk_font.Font(
                 name="SmallLinkFont",
                 family=default_font.cget("family"),
@@ -799,7 +542,7 @@ class Workbench(tk.Tk):
             self._ipc_requests = None
             return
 
-        self._ipc_requests = queue.Queue()  # type: queue.Queue[Dict[str, Any]]
+        self._ipc_requests = queue.Queue()  # type: queue.Queue[bytes]
         server_socket, actual_secret = self._create_server_socket()
         server_socket.listen(10)
 
@@ -815,9 +558,9 @@ class Workbench(tk.Tk):
                             data += new_data
                         else:
                             break
-                    proposed_secret, parsed_args = ast.literal_eval(data.decode("UTF-8"))
+                    proposed_secret, args = ast.literal_eval(data.decode("UTF-8"))
                     if proposed_secret == actual_secret:
-                        self._ipc_requests.put(parsed_args)
+                        self._ipc_requests.put(args)
                         # respond OK
                         client_socket.sendall(SERVER_SUCCESS.encode(encoding="utf-8"))
                         client_socket.shutdown(socket.SHUT_WR)
@@ -861,11 +604,11 @@ class Workbench(tk.Tk):
             tr("Exit"),
             self._on_close,
             default_sequence=select_sequence("<Alt-F4>", "<Command-q>", "<Control-q>"),
-            extra_sequences=(
-                ["<Alt-F4>"]
-                if running_on_linux()
-                else ["<Control-q>"] if running_on_windows() else []
-            ),
+            extra_sequences=["<Alt-F4>"]
+            if running_on_linux()
+            else ["<Control-q>"]
+            if running_on_windows()
+            else [],
         )
 
         self.add_command("show_options", "tools", tr("Options..."), self.show_options, group=180)
@@ -912,15 +655,28 @@ class Workbench(tk.Tk):
             group=70,
         )
 
-        self.add_command(
-            "toggle_full_screen",
-            "view",
-            tr("Full screen"),
-            self._cmd_toggle_full_screen,
-            flag_name="view.full_screen",
-            default_sequence=select_sequence("<F11>", "<Command-Shift-F>"),
-            group=80,
-        )
+        if self.get_ui_mode() == "expert":
+            self.add_command(
+                "toggle_maximize_view",
+                "view",
+                tr("Maximize view"),
+                self._cmd_toggle_maximize_view,
+                flag_name="view.maximize_view",
+                default_sequence=None,
+                group=80,
+            )
+            self.bind_class("TNotebook", "<Double-Button-1>", self._maximize_view, True)
+            self.bind("<Escape>", self._unmaximize_view, True)
+
+            self.add_command(
+                "toggle_maximize_view",
+                "view",
+                tr("Full screen"),
+                self._cmd_toggle_full_screen,
+                flag_name="view.full_screen",
+                default_sequence=select_sequence("<F11>", "<Command-Shift-F>"),
+                group=80,
+            )
 
         if self.in_simple_mode():
             self.add_command(
@@ -951,7 +707,7 @@ class Workbench(tk.Tk):
             self._support_ukraine,
             image="Ukraine",
             caption=tr("Support"),
-            include_in_toolbar=False,
+            include_in_toolbar=True,
             group=101,
         )
 
@@ -961,116 +717,78 @@ class Workbench(tk.Tk):
     def _print_state_for_debugging(self, event) -> None:
         print(get_runner()._postponed_commands)
 
-    def _panes_have_visible_views(self, locations: List[str]):
-        for location in locations:
-            views_conf_key = f"layout.notebook_{location}.views"
-            for view_id in self.get_option(views_conf_key):
-                if self.get_option(f"{view_id}.visible"):
-                    return True
-
-        return False
-
     def _init_containers(self) -> None:
         margin = ems_to_pixels(0.6)
-        # Main frame functions as a background behind padding of main_pw, without this OS X leaves white border
+        # Main frame functions as
+        # - a background behind padding of main_pw, without this OS X leaves white border
+        # - a container to be hidden, when a view is maximized and restored when view is back home
         main_frame = ttk.Frame(self)  #
         self._main_frame = main_frame
         main_frame.grid(row=1, column=0, sticky=tk.NSEW)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
+        self._maximized_view = None  # type: Optional[tk.Widget]
 
         self._toolbar = ttk.Frame(main_frame, padding=0)
         self._toolbar.grid(
             column=0, row=0, sticky=tk.NSEW, padx=margin, pady=(ems_to_pixels(0.5), 0)
         )
 
-        # NB! Some layout and notebook defaults are set in _init_configuration, because they are needed earlier
         self.set_default("layout.west_pw_width", ems_to_pixels(15))
         self.set_default("layout.east_pw_width", ems_to_pixels(15))
 
         self.set_default("layout.s_nb_height", ems_to_pixels(15))
         self.set_default("layout.nw_nb_height", ems_to_pixels(15))
-        self.set_default("layout.w_nb_height", ems_to_pixels(15))
         self.set_default("layout.sw_nb_height", ems_to_pixels(15))
         self.set_default("layout.ne_nb_height", ems_to_pixels(15))
-        self.set_default("layout.e_nb_height", ems_to_pixels(15))
         self.set_default("layout.se_nb_height", ems_to_pixels(15))
 
-        self._main_pw = WorkbenchPanedWindow(main_frame, orient=tk.HORIZONTAL)
+        self._main_pw = AutomaticPanedWindow(main_frame, orient=tk.HORIZONTAL)
 
         self._main_pw.grid(column=0, row=1, sticky=tk.NSEW, padx=margin, pady=(margin, 0))
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
 
-        self._west_pw = WorkbenchPanedWindow(
-            self._main_pw, orient=tk.VERTICAL, size_config_key="layout.west_pw_width"
+        self._west_pw = AutomaticPanedWindow(
+            self._main_pw,
+            1,
+            orient=tk.VERTICAL,
+            preferred_size_in_pw=self.get_option("layout.west_pw_width"),
         )
-        self._center_pw = WorkbenchPanedWindow(self._main_pw, orient=tk.VERTICAL)
-        self._east_pw = WorkbenchPanedWindow(
-            self._main_pw, orient=tk.VERTICAL, size_config_key="layout.east_pw_width"
-        )
-
-        pane_minsize = ems_to_pixels(10)
-
-        self._main_pw.add(
-            self._west_pw,
-            width=self.get_option("layout.west_pw_width"),
-            minsize=pane_minsize,
-            hide=not self._panes_have_visible_views(["nw", "w", "sw"]),
-            sticky="nsew",
-            stretch="never",
-        )
-        self._main_pw.add(self._center_pw, minsize=pane_minsize, sticky="nsew", stretch="always")
-        self._main_pw.add(
-            self._east_pw,
-            width=self.get_option("layout.east_pw_width"),
-            hide=not self._panes_have_visible_views(["ne", "e", "se"]),
-            minsize=pane_minsize,
-            sticky="nsew",
-            stretch="never",
+        self._center_pw = AutomaticPanedWindow(self._main_pw, 2, orient=tk.VERTICAL)
+        self._east_pw = AutomaticPanedWindow(
+            self._main_pw,
+            3,
+            orient=tk.VERTICAL,
+            preferred_size_in_pw=self.get_option("layout.east_pw_width"),
         )
 
-        self._view_notebooks: Dict[str, ViewNotebook] = {
-            "nw": ViewNotebook(self._west_pw, "nw", 1),
-            "w": ViewNotebook(self._west_pw, "w", 2),
-            "sw": ViewNotebook(self._west_pw, "sw", 3),
-            "s": ViewNotebook(self._center_pw, "s", 3),
-            "ne": ViewNotebook(self._east_pw, "ne", 1),
-            "e": ViewNotebook(self._east_pw, "e", 2),
-            "se": ViewNotebook(self._east_pw, "se", 3),
+        self._view_notebooks = {
+            "nw": AutomaticNotebook(
+                self._west_pw, 1, preferred_size_in_pw=self.get_option("layout.nw_nb_height")
+            ),
+            "w": AutomaticNotebook(self._west_pw, 2),
+            "sw": AutomaticNotebook(
+                self._west_pw, 3, preferred_size_in_pw=self.get_option("layout.sw_nb_height")
+            ),
+            "s": AutomaticNotebook(
+                self._center_pw, 3, preferred_size_in_pw=self.get_option("layout.s_nb_height")
+            ),
+            "ne": AutomaticNotebook(
+                self._east_pw, 1, preferred_size_in_pw=self.get_option("layout.ne_nb_height")
+            ),
+            "e": AutomaticNotebook(self._east_pw, 2),
+            "se": AutomaticNotebook(
+                self._east_pw, 3, preferred_size_in_pw=self.get_option("layout.se_nb_height")
+            ),
         }
 
-        for pos in ["nw", "w", "sw"]:
-            self._west_pw.add(
-                self._view_notebooks[pos],
-                minsize=pane_minsize,
-                height=self.get_option(f"layout.{pos}_nb_height"),
-                hide=not self._panes_have_visible_views([pos]),
-                sticky="nsew",
-                stretch="always",
-            )
+        for nb_name in self._view_notebooks:
+            self.set_default("layout.notebook_" + nb_name + "_visible_view", None)
 
         self._editor_notebook = EditorNotebook(self._center_pw)
         self._editor_notebook.position_key = 1
-        self._center_pw.add(self._editor_notebook, minsize=pane_minsize, stretch="always")
-        self._center_pw.add(
-            self._view_notebooks["s"],
-            minsize=pane_minsize,
-            height=self.get_option("layout.s_nb_height"),
-            hide=not self._panes_have_visible_views(["s"]),
-            sticky="nsew",
-            stretch="never",
-        )
-
-        for pos in ["ne", "e", "se"]:
-            self._east_pw.add(
-                self._view_notebooks[pos],
-                minsize=pane_minsize,
-                height=self.get_option(f"layout.{pos}_nb_height"),
-                hide=not self._panes_have_visible_views([pos]),
-                sticky="nsew",
-                stretch="always",
-            )
+        self._center_pw.insert("auto", self._editor_notebook)
 
         self._statusbar = ttk.Frame(main_frame)
         self._statusbar.grid(column=0, row=2, sticky="nsew", padx=margin, pady=(0))
@@ -1097,7 +815,6 @@ class Workbench(tk.Tk):
     def _init_backend_switcher(self):
         # Set up the menu
         self._backend_conf_variable = tk.StringVar(value="{}")
-        self._last_active_backend_conf_variable_value = None
 
         if running_on_mac_os():
             menu_conf = {}
@@ -1105,38 +822,11 @@ class Workbench(tk.Tk):
             menu_conf = get_style_configuration("Menu")
         self._backend_menu = tk.Menu(self._statusbar, tearoff=False, **menu_conf)
 
-        # Set up the buttons
-        self._connection_button = CustomToolbutton(
-            self._statusbar, text="", command=self._toggle_connection
-        )
-        self._connection_button.grid(row=1, column=8, sticky="nes")
+        # Set up the button.
+        self._backend_button = ttk.Button(self._statusbar, text=get_menu_char(), style="Toolbutton")
 
-        self._backend_button = CustomToolbutton(
-            self._statusbar, text=get_menu_char(), command=self._post_backend_menu
-        )
-
-        self._backend_button.grid(row=1, column=9, sticky="nes")
-
-    def _update_connection_button(self):
-        if get_runner().is_connected():
-            # ▣☑☐🔲🔳☑️☹️🟢🔴🔵🟠🟡🟣🟤🟦🟧🟥🟨🟩🟪🟫🟬🟭🟮
-            self._connection_button.configure(text=" ☑ ")
-            should_be_visible = get_runner().disconnect_enabled()
-        else:
-            self._connection_button.configure(text=" ☐ ")
-            should_be_visible = True
-
-        if should_be_visible and not self._connection_button.winfo_ismapped():
-            self._connection_button.grid()
-        elif not should_be_visible and self._connection_button.winfo_ismapped():
-            self._connection_button.grid_remove()
-
-    def _toggle_connection(self):
-        if get_runner().is_connected():
-            get_runner().get_backend_proxy().disconnect()
-        else:
-            get_runner().restart_backend(clean=False, first=False, automatic=False)
-        self._update_connection_button()
+        self._backend_button.grid(row=1, column=3, sticky="nes")
+        self._backend_button.configure(command=self._post_backend_menu)
 
     def _post_backend_menu(self):
         from thonny.plugins.micropython.uf2dialog import (
@@ -1146,16 +836,8 @@ class Workbench(tk.Tk):
 
         menu_font = tk_font.nametofont("TkMenuFont")
 
-        def try_choose_backend():
-            backend_conf, machine_id = ast.literal_eval(self._backend_conf_variable.get())
-            could_close = self.get_editor_notebook().try_close_remote_files_from_another_machine(
-                dialog_parent=self, new_machine_id=machine_id
-            )
-            if not could_close:
-                # the variable has been changed. Need to revert it
-                self._backend_conf_variable.set(value=self._last_active_backend_conf_variable_value)
-                return
-
+        def choose_backend():
+            backend_conf = ast.literal_eval(self._backend_conf_variable.get())
             assert isinstance(backend_conf, dict), "backend conf is %r" % backend_conf
             for name, value in backend_conf.items():
                 self.set_option(name, value)
@@ -1170,16 +852,16 @@ class Workbench(tk.Tk):
         for backend in sorted(self.get_backends().values(), key=lambda x: x.sort_key):
             entries = backend.proxy_class.get_switcher_entries()
 
-            for conf, label, machine_id in entries:
+            for conf, label in entries:
                 if not added_micropython_separator and "MicroPython" in label:
                     self._backend_menu.add_separator()
                     added_micropython_separator = True
 
                 self._backend_menu.add_radiobutton(
                     label=label,
-                    command=try_choose_backend,
+                    command=choose_backend,
                     variable=self._backend_conf_variable,
-                    value=repr((conf, machine_id)),
+                    value=repr(conf),
                 )
 
                 max_description_width = max(menu_font.measure(label), max_description_width)
@@ -1199,11 +881,6 @@ class Workbench(tk.Tk):
                 command=lambda: show_uf2_installer(self, "CircuitPython"),
             )
             self._backend_menu.add_separator()
-
-        self._backend_menu.add_command(
-            label=tr("Create new virtual environment") + "...",
-            command=self._create_new_virtual_environment,
-        )
 
         self._backend_menu.add_command(
             label=tr("Configure interpreter..."),
@@ -1232,42 +909,23 @@ class Workbench(tk.Tk):
                 logger.warning("Problem with switcher popup", exc_info=e)
 
     def _on_backend_restart(self, event):
-        logger.info("Handling backend restart")
         proxy = get_runner().get_backend_proxy()
         if proxy:
             conf = proxy.get_current_switcher_configuration()
             desc = proxy.get_switcher_configuration_label(conf)
-            switcher_value = repr((conf, proxy.get_machine_id()))
+            value = repr(conf)
         else:
             desc = "<no backend>"
-            switcher_value = "n/a"
+            value = "n/a"
 
-        self._backend_conf_variable.set(value=switcher_value)
-        self._last_active_backend_conf_variable_value = switcher_value
+        self._backend_conf_variable.set(value=value)
         self._backend_button.configure(text=desc + "  " + get_menu_char())
-        self._update_connection_button()
-
-        self.start_or_restart_language_servers()
-
-    def _on_backend_terminated(self, event):
-        self._update_connection_button()
 
     def _init_theming(self) -> None:
-        if self.get_option("view.ui_theme") == "Kind of Aqua":
-            # replace pre-Thonny 5 theme with new theme
-            self.set_option("view.ui_theme", "macOS")
-
         self._style = ttk.Style()
-        # value is (parent, settings, overrides, images)
-        self._ui_themes: Dict[
-            str,
-            Tuple[
-                Optional[str],
-                FlexibleUiThemeSettings,
-                Optional[FlexibleUiThemeSettings],
-                Dict[str, str],
-            ],
-        ] = {}
+        self._ui_themes = (
+            {}
+        )  # type: Dict[str, Tuple[Optional[str], FlexibleUiThemeSettings, Dict[str, str]]] # value is (parent, settings, images)
         self._syntax_themes = (
             {}
         )  # type: Dict[str, Tuple[Optional[str], FlexibleSyntaxThemeSettings]] # value is (parent, settings)
@@ -1484,14 +1142,10 @@ class Workbench(tk.Tk):
         if include_in_toolbar:
             toolbar_group = self._get_menu_index(menu) * 100 + group
             assert caption is not None
-            assert image is not None
-            toolbar_image = self.get_image(image, for_toolbar=True)
-            disabled_toolbar_image = self.get_image(image, for_toolbar=True, disabled=True)
-
             self._add_toolbar_button(
                 command_id,
-                toolbar_image,
-                disabled_toolbar_image,
+                _image,
+                _disabled_image,
                 command_label,
                 caption,
                 caption if alternative_caption is None else alternative_caption,
@@ -1500,9 +1154,6 @@ class Workbench(tk.Tk):
                 tester,
                 toolbar_group,
             )
-
-    def set_status_message(self, text: str) -> None:
-        self._status_label.configure(text=text)
 
     def add_view(
         self,
@@ -1523,41 +1174,29 @@ class Workbench(tk.Tk):
         Returns: None
         """
         view_id = cls.__name__
-        if default_position_key is None:
-            default_position_key = view_id
-
-        for nb_name in VIEW_LOCATION_CODES:
-            nb_views = self.get_option("layout.notebook_" + nb_name + ".views")
-            if view_id in nb_views:
-                # view is already known, positioned and possibly re-positioned and hidden/shown by the user
-                break
-        else:
-            # Position the view into the notebook's list
-            nb_views = self.get_option("layout.notebook_" + default_location + ".views")
-            logger.info("First time adding %r to %r", view_id, nb_views)
-            i = 0
-            while i + 1 < len(nb_views) and nb_views[i] < default_position_key:
-                i += 1
-            nb_views.insert(i, view_id)
-            self.set_option("layout.notebook_" + default_location + ".views", nb_views)
+        if default_position_key == None:
+            default_position_key = label
 
         self.set_default("view." + view_id + ".visible", visible_by_default)
+        self.set_default("view." + view_id + ".location", default_location)
+        self.set_default("view." + view_id + ".position_key", default_position_key)
 
         if self.in_simple_mode():
-            visibility_var = tk.BooleanVar(value=view_id in SIMPLE_MODE_VIEWS)
+            visibility_flag = tk.BooleanVar(value=view_id in SIMPLE_MODE_VIEWS)
         else:
-            visibility_var = cast(tk.BooleanVar, self.get_variable("view." + view_id + ".visible"))
+            visibility_flag = cast(tk.BooleanVar, self.get_variable("view." + view_id + ".visible"))
 
-        # Prepare the elements for creating the view and representing its visibility
         self._view_records[view_id] = {
             "class": cls,
             "label": label,
-            "visibility_var": visibility_var,
+            "location": self.get_option("view." + view_id + ".location"),
+            "position_key": self.get_option("view." + view_id + ".position_key"),
+            "visibility_flag": visibility_flag,
         }
 
         # handler
         def toggle_view_visibility():
-            if visibility_var.get():
+            if visibility_flag.get():
                 self.hide_view(view_id)
             else:
                 self.show_view(view_id, True)
@@ -1580,12 +1219,6 @@ class Workbench(tk.Tk):
     def add_content_inspector(self, inspector_class: Type) -> None:
         self.content_inspector_classes.append(inspector_class)
 
-    def add_assistant(self, name: str, assistant: assistance.Assistant):
-        self.assistants[name.lower()] = assistant
-
-    def add_language_server_proxy_class(self, proxy_class: Type[LanguageServerProxy]):
-        self._language_server_proxy_classes.append(proxy_class)
-
     def add_backend(
         self,
         name: str,
@@ -1604,24 +1237,22 @@ class Workbench(tk.Tk):
 
         self.set_default(f"{name}.last_configurations", [])
 
-        # assign names to related classes
+        # assing names to related classes
         proxy_class.backend_name = name  # type: ignore
         proxy_class.backend_description = description  # type: ignore
         config_page_constructor.backend_name = name
-        config_page_constructor.proxy_class = proxy_class
 
     def add_ui_theme(
         self,
         name: str,
         parent: Union[str, None],
         settings: FlexibleUiThemeSettings,
-        dark_mode_overrides: Optional[FlexibleUiThemeSettings] = None,
         images: Dict[str, str] = {},
     ) -> None:
         if name in self._ui_themes:
             warn(tr("Overwriting theme '%s'") % name)
 
-        self._ui_themes[name] = (parent, settings, dark_mode_overrides, images)
+        self._ui_themes[name] = (parent, settings, images)
 
     def add_syntax_theme(
         self, name: str, parent: Optional[str], settings: FlexibleSyntaxThemeSettings
@@ -1631,16 +1262,10 @@ class Workbench(tk.Tk):
 
         self._syntax_themes[name] = (parent, settings)
 
-    def add_program_analyzer(
-        self, name: str, analyzer: ProgramAnalyzer, enabled_by_default: bool = True
-    ):
-        self.set_default(f"analysis.{name}.enabled", enabled_by_default)
-        self.program_analyzers[name] = analyzer
-
-    def get_usable_ui_theme_names(self) -> List[str]:
+    def get_usable_ui_theme_names(self) -> Sequence[str]:
         return sorted([name for name in self._ui_themes if self._ui_themes[name][0] is not None])
 
-    def get_syntax_theme_names(self) -> List[str]:
+    def get_syntax_theme_names(self) -> Sequence[str]:
         return sorted(self._syntax_themes.keys())
 
     def get_ui_mode(self) -> str:
@@ -1668,10 +1293,8 @@ class Workbench(tk.Tk):
         total_images = {}  # type: Dict[str, str]
         temp_name = name
         while True:
-            parent, settings, overrides, images = self._ui_themes[temp_name]
+            parent, settings, images = self._ui_themes[temp_name]
             total_settings.insert(0, settings)
-            if overrides and os_is_in_dark_mode():
-                total_settings.append(overrides)
             for img_name in images:
                 total_images.setdefault(img_name, images[img_name])
 
@@ -1711,7 +1334,7 @@ class Workbench(tk.Tk):
         self._style.theme_use(name)
 
         # https://wiki.tcl.tk/37973#pagetocfe8b22ab
-        for setting in ["background", "foreground", "selectbackground", "selectforeground"]:
+        for setting in ["background", "foreground", "selectBackground", "selectForeground"]:
             value = self._style.lookup("Listbox", setting)
             if value:
                 self.option_add("*TCombobox*Listbox." + setting, value)
@@ -1728,10 +1351,6 @@ class Workbench(tk.Tk):
                 menu.configure(get_style_configuration("Menu"))
 
         self.update_fonts()
-
-        if running_on_windows():
-            darkness_value = int(self.uses_dark_ui_theme())
-            set_windows_titlebar_darkness(self, darkness_value)
 
     def _apply_syntax_theme(self, name: str) -> None:
         def get_settings(name):
@@ -1783,10 +1402,10 @@ class Workbench(tk.Tk):
             return "Windows"
         elif running_on_rpi() and "Raspberry Pi" in available_themes:
             return "Raspberry Pi"
-        elif "macOS" in available_themes:
-            return "macOS"
+        elif "Enhanced Clam" in available_themes:
+            return "Enhanced Clam"
         else:
-            return "Tidy Light A"
+            return "clam"
 
     def get_default_syntax_theme(self) -> str:
         if self.uses_dark_ui_theme():
@@ -1800,7 +1419,7 @@ class Workbench(tk.Tk):
             if "dark" in name.lower():
                 return True
             try:
-                name, _, _, _ = self._ui_themes[name]
+                name, _, _ = self._ui_themes[name]
             except KeyError:
                 return False
 
@@ -1917,7 +1536,7 @@ class Workbench(tk.Tk):
 
     def _show_views(self) -> None:
         for view_id in self._view_records:
-            if self._view_records[view_id]["visibility_var"].get():
+            if self._view_records[view_id]["visibility_flag"].get():
                 try:
                     self.show_view(view_id, False)
                 except Exception:
@@ -1930,25 +1549,12 @@ class Workbench(tk.Tk):
     def get_backends(self) -> Dict[str, BackendSpec]:
         return self._backends
 
-    def get_options_snapshot(self) -> Dict[str, Any]:
-        return self._configuration_manager.get_snapshot()
-
     def get_option(self, name: str, default=None) -> Any:
         # Need to return Any, otherwise each typed call site needs to cast
         return self._configuration_manager.get_option(name, default)
 
-    def has_option(self, name: str) -> bool:
-        return self._configuration_manager.get_option(name, "missingOption") != "missingOption"
-
     def set_option(self, name: str, value: Any) -> None:
         self._configuration_manager.set_option(name, value)
-
-    def get_secret(self, name: str, default: Optional[str] = None) -> Optional[str]:
-        return self._secrets.get(name, default)
-
-    def set_secret(self, name: str, value: str) -> None:
-        self._secrets[name] = value
-        self._save_secrets()
 
     def get_local_cwd(self) -> str:
         cwd = self.get_option("run.working_directory")
@@ -1956,16 +1562,6 @@ class Workbench(tk.Tk):
             return normpath_with_actual_case(cwd)
         else:
             return normpath_with_actual_case(os.path.expanduser("~"))
-
-    def get_local_project_path(self) -> Optional[str]:
-        dir_path = self.get_local_cwd()
-
-        while dir_path and dir_path[-1] not in ["/", "\\", ":"]:
-            if is_local_project_dir(dir_path):
-                return dir_path
-            dir_path = os.path.dirname(dir_path)
-
-        return None
 
     def set_local_cwd(self, value: str) -> None:
         if self.get_option("run.working_directory") != value:
@@ -2006,7 +1602,7 @@ class Workbench(tk.Tk):
             else:
                 conf = get_style_configuration("Menu")
 
-            menu = tk.Menu(self._menubar, name=name, **conf)
+            menu = tk.Menu(self._menubar, **conf)
             menu["postcommand"] = lambda: self._update_menu(menu, name)
             self._menubar.add_cascade(label=label if label else name, menu=menu)
 
@@ -2021,11 +1617,26 @@ class Workbench(tk.Tk):
             if not create:
                 raise RuntimeError("View %s not created" % view_id)
             class_ = self._view_records[view_id]["class"]
-            # View's master must contain all notebooks to allow dragging between notebooks
-            view = class_(self._main_pw)
-            view.containing_notebook = None
-            view.view_id = view_id
+            location = self._view_records[view_id]["location"]
+            master = self._view_notebooks[location]
+
+            # create the view
+            view = class_(self)  # View's master is workbench to allow making it maximized
+            view.position_key = self._view_records[view_id]["position_key"]
             self._view_records[view_id]["instance"] = view
+
+            # create the view home_widget to be added into notebook
+            view.home_widget = ttk.Frame(master)
+            view.home_widget.columnconfigure(0, weight=1)
+            view.home_widget.rowconfigure(0, weight=1)
+            view.home_widget.maximizable_widget = view  # type: ignore
+            view.home_widget.close = lambda: self.hide_view(view_id)  # type: ignore
+            if hasattr(view, "position_key"):
+                view.home_widget.position_key = view.position_key  # type: ignore
+
+            # initially the view will be in it's home_widget
+            view.grid(row=0, column=0, sticky=tk.NSEW, in_=view.home_widget)
+            view.hidden = True
 
         return self._view_records[view_id]["instance"]
 
@@ -2038,19 +1649,8 @@ class Workbench(tk.Tk):
         return os.path.dirname(sys.modules["thonny"].__file__)
 
     def get_image(
-        self,
-        filename: str,
-        tk_name: Optional[str] = None,
-        disabled=False,
-        for_toolbar=False,
+        self, filename: str, tk_name: Optional[str] = None, disabled=False
     ) -> tk.PhotoImage:
-        if tk_name is None:
-            tk_name = filename.replace(".", "_").replace("\\", "_").replace("/", "_")
-            if for_toolbar:
-                tk_name += "_toolbar"
-            if disabled:
-                tk_name += "_disabled"
-
         if filename in self._image_mapping_by_theme[self._current_theme_name]:
             filename = self._image_mapping_by_theme[self._current_theme_name][filename]
 
@@ -2081,9 +1681,7 @@ class Workbench(tk.Tk):
         treeview_rowheight = self._compute_treeview_rowheight()
         threshold = self.get_option("general.large_icon_rowheight_threshold")
         if (
-            for_toolbar  # Always use larger images for toolbar buttons
-            and not filename.endswith("48.png")
-            or treeview_rowheight > threshold
+            treeview_rowheight > threshold
             and not filename.endswith("48.png")
             or treeview_rowheight > threshold * 1.5
         ):
@@ -2116,193 +1714,64 @@ class Workbench(tk.Tk):
         """View must be already registered.
 
         Args:
-            view_id: View class name without package name (e.g. 'ShellView')"""
+            view_id: View class name
+            without package name (eg. 'ShellView')"""
 
-        view_id = self._convert_view_id(view_id)
+        if view_id == "MainFileBrowser":
+            # Was renamed in 3.1.1
+            view_id = "FilesView"
 
+        # NB! Don't forget that view.home_widget is added to notebook, not view directly
         # get or create
         view = self.get_view(view_id)
-        containing_notebook = getattr(view, "containing_notebook", None)
+        notebook = view.home_widget.master  # type: ignore
 
         if hasattr(view, "before_show") and view.before_show() == False:  # type: ignore
             return False
 
-        if containing_notebook is None:
-            nb_name, notebook = self._get_view_notebook_name_and_instance(view_id)
+        if view.hidden:  # type: ignore
             label = None
             if hasattr(view, "get_tab_text"):
                 label = view.get_tab_text()
             if not label:
                 label = self._view_records[view_id]["label"]
-            logger.info("Adding view %r to notebook %s", view, notebook)
-
-            # Compute the position among current visible views in this notebook
-            nb_view_order: List[str] = self.get_option("layout.notebook_" + nb_name + ".views")
-            visible_nb_views = []
-            for page in notebook.pages:
-                other_view_id = getattr(page.content, "view_id", None)
-                if other_view_id is not None:
-                    visible_nb_views.append(other_view_id)
-
-            assert view_id not in visible_nb_views
-            assert view_id in nb_view_order
-
-            visible_on_the_left = 0
-            for visible_view_id in visible_nb_views:
-                if nb_view_order.index(visible_view_id) < nb_view_order.index(view_id):
-                    visible_on_the_left += 1
-                else:
-                    break
-
-            if visible_on_the_left == len(notebook.pages):
-                notebook.add(view, text=label)
-            else:
-                notebook.insert(visible_on_the_left, view, text=label)
-
-            if hasattr(view, "on_show"):
+            notebook.insert("auto", view.home_widget, text=label)  # type: ignore
+            view.hidden = False  # type: ignore
+            if hasattr(view, "on_show"):  # type: ignore
                 view.on_show()
 
         # switch to the tab
-        view.containing_notebook.select(view)  # type: ignore
+        notebook.select(view.home_widget)  # type: ignore
 
         # add focus
         if set_focus:
             view.focus_set()
 
+        self.set_option("view." + view_id + ".visible", True)
+        self.event_generate("ShowView", view=view, view_id=view_id)
         return view
 
-    def _get_view_notebook_name_and_instance(self, view_id: str) -> Tuple[str, ViewNotebook]:
-        for nb_name, instance in self._view_notebooks.items():
-            if view_id in self.get_option("layout.notebook_" + nb_name + ".views"):
-                return nb_name, self._view_notebooks[nb_name]
+    def hide_view(self, view_id: str) -> Union[bool, None]:
+        # NB! Don't forget that view.home_widget is added to notebook, not view directly
 
-        raise ValueError("Could not find the notebook of " + view_id)
-
-    def _notebook_page_opened(self, event) -> None:
-        logger.info("Notebook page opened: %r", event)
-        page: CustomNotebookPage = event.page
-        view_id = getattr(page.content, "view_id", None)
-        if view_id is not None:
-            self.set_option("view." + view_id + ".visible", True)
-            self.event_generate("ShowView", view=event.page.content, view_id=view_id)
-
-    def _notebook_page_closed(self, event) -> None:
-        logger.info("Notebook page closed: %r", event)
-        page: CustomNotebookPage = event.page
-        view_id = getattr(page.content, "view_id", None)
-        if view_id is not None:
-            self.set_option("view." + view_id + ".visible", False)
-            self.event_generate("HideView", view=event.page.content, view_id=view_id)
-
-    def _notebook_page_moved(self, event) -> None:
-        logger.info("Notebook page moved: %r", event)
-        page: CustomNotebookPage = event.page
-        new_notebook: CustomNotebook = event.new_notebook
-        old_notebook: CustomNotebook = event.old_notebook
-
-        if isinstance(new_notebook, EditorNotebook):
-            assert new_notebook is old_notebook
-            new_notebook.remember_open_files()
-            editor: Editor = page.content
-            self.event_generate(
-                "MoveEditor",
-                uri=editor.get_uri(),
-                filename=uri_to_legacy_filename(editor.get_uri()),
-            )
-        else:
-            assert isinstance(new_notebook, ViewNotebook)
-            assert isinstance(old_notebook, ViewNotebook)
-            view_id = getattr(page.content, "view_id", None)
-            assert view_id is not None
-
-            logger.info(
-                "Moving view %r from %r to %r",
-                view_id,
-                old_notebook.location_in_workbench,
-                new_notebook.location_in_workbench,
-            )
-            new_notebook_views: List[str] = self.get_option(
-                "layout.notebook_" + new_notebook.location_in_workbench + ".views"
-            )
-
-            if new_notebook is not old_notebook:
-                old_notebook_views: List[str] = self.get_option(
-                    "layout.notebook_" + old_notebook.location_in_workbench + ".views"
-                )
-                logger.info(
-                    "Removing %r from views %r of notebook %r",
-                    view_id,
-                    old_notebook_views,
-                    new_notebook.location_in_workbench,
-                )
-                logger.info(
-                    "Adding %r to views %r of notebook %r",
-                    view_id,
-                    new_notebook_views,
-                    new_notebook.location_in_workbench,
-                )
-                assert view_id in old_notebook_views
-                assert view_id not in new_notebook_views
-                old_notebook_views.remove(view_id)
-                self.set_option(
-                    "layout.notebook_" + old_notebook.location_in_workbench + ".views",
-                    old_notebook_views,
-                )
-            else:
-                logger.info(
-                    "Moving %r among views %r of notebook %r",
-                    view_id,
-                    new_notebook_views,
-                    new_notebook.location_in_workbench,
-                )
-                assert view_id in new_notebook_views
-                new_notebook_views.remove(view_id)  # will put it back soon
-
-            assert view_id not in new_notebook_views
-
-            # Adjust saved view position in the configuration list. Not trivial, because the list also contains
-            # hidden views but the notebook doesn't.
-            index_in_nb = new_notebook.index(page.content)
-            logger.info("index in nb %r", index_in_nb)
-            if index_in_nb == len(new_notebook.pages) - 1:
-                new_notebook_views.append(view_id)
-                logger.info("appending")
-            else:
-                right_neighbor_page = new_notebook.pages[index_in_nb + 1]
-                right_neighbor_view_id = right_neighbor_page.content.view_id
-                right_neighbor_conf_index = new_notebook_views.index(right_neighbor_view_id)
-                logger.info(
-                    "Right neighbor %r index %r", right_neighbor_view_id, right_neighbor_conf_index
-                )
-                new_notebook_views.insert(right_neighbor_conf_index, view_id)
-
-            self.set_option(
-                "layout.notebook_" + new_notebook.location_in_workbench + ".views",
-                new_notebook_views,
-            )
-            logger.info(
-                "New view order for notebook %r: %r",
-                new_notebook.location_in_workbench,
-                self.get_option("layout.notebook_" + new_notebook.location_in_workbench + ".views"),
-            )
-            self.event_generate("MoveView", view=event.page.content, view_id=view_id)
-
-    def hide_view(self, view_id: str) -> None:
         if "instance" in self._view_records[view_id]:
+            # TODO: handle the case, when view is maximized
             view = self._view_records[view_id]["instance"]
-            if view.containing_notebook is None:
-                # Already hidden
-                return
+            if view.hidden:
+                return True
 
-            view.containing_notebook.forget(view)
+            if hasattr(view, "before_hide") and view.before_hide() == False:
+                return False
 
-    def queue_event(self, sequence: str, event: Any = None) -> None:
-        """
-        Asynchronous variant of event_generate. Safe to use from a background thread.
-        """
-        self._event_queue.put((sequence, event))
+            view.home_widget.master.forget(view.home_widget)
+            self.set_option("view." + view_id + ".visible", False)
 
-    def event_generate(self, sequence: str, event: Any = None, **kwargs) -> None:
+            self.event_generate("HideView", view=view, view_id=view_id)
+            view.hidden = True
+
+        return True
+
+    def event_generate(self, sequence: str, event: Optional[Record] = None, **kwargs) -> None:
         """Uses custom event handling when sequence doesn't start with <.
         In this case arbitrary attributes can be added to the event.
         Otherwise forwards the call to Tk's event_generate"""
@@ -2314,11 +1783,8 @@ class Workbench(tk.Tk):
             if sequence in self._event_handlers:
                 if event is None:
                     event = WorkbenchEvent(sequence, **kwargs)
-                elif kwargs:
-                    if isinstance(event, (Record, Dict)):
-                        event.update(kwargs)
-                    else:
-                        raise ValueError(f"Can't update {type(event)} with kwargs")
+                else:
+                    event.update(kwargs)
 
                 # make a copy of handlers, so that event handler can remove itself
                 # from the registry during iteration
@@ -2461,7 +1927,7 @@ class Workbench(tk.Tk):
             # shell may be not created yet
             pass
         else:
-            shell.update_appearance()
+            shell.update_tabs()
 
         tk_font.nametofont("EditorFont").configure(family=editor_font_family, size=editor_font_size)
         tk_font.nametofont("SmallEditorFont").configure(
@@ -2552,18 +2018,19 @@ class Workbench(tk.Tk):
         else:
             image_spec = image
 
-        button = CustomToolbutton(
+        button = ttk.Button(
             group_frame,
             image=image_spec,
+            style="Toolbutton",
             state=tk.NORMAL,
             text=caption,
             compound="top" if self.in_simple_mode() else None,
-            pad=ems_to_pixels(0.5) if self.in_simple_mode() else ems_to_pixels(0.25),
+            pad=(10, 0) if self.in_simple_mode() else None,
             width=button_width,
         )
 
         def toolbar_handler(*args):
-            handler()
+            handler(*args)
             self._update_toolbar()
             if self.focus_get() == button:
                 # previously selected widget would be better candidate, but this is
@@ -2670,6 +2137,47 @@ class Workbench(tk.Tk):
 
             self.geometry(new_geometry)
 
+    def _maximize_view(self, event=None) -> None:
+        if self._maximized_view is not None:
+            return
+
+        # find the widget that can be relocated
+        widget = self.focus_get()
+        if isinstance(widget, (EditorNotebook, AutomaticNotebook)):
+            current_tab = widget.get_current_child()
+            if current_tab is None:
+                return
+
+            if not hasattr(current_tab, "maximizable_widget"):
+                return
+
+            widget = current_tab.maximizable_widget
+
+        while widget is not None:
+            if hasattr(widget, "home_widget"):
+                # if widget is view, then widget.master is workbench
+                widget.grid(row=1, column=0, sticky=tk.NSEW, in_=widget.master)  # type: ignore
+                # hide main_frame
+                self._main_frame.grid_forget()
+                self._maximized_view = widget
+                self.get_variable("view.maximize_view").set(True)
+                break
+            else:
+                widget = widget.master  # type: ignore
+
+    def _unmaximize_view(self, event=None) -> None:
+        if self._maximized_view is None:
+            return
+
+        # restore main_frame
+        self._main_frame.grid(row=1, column=0, sticky=tk.NSEW, in_=self)
+        # put the maximized view back to its home_widget
+        self._maximized_view.grid(
+            row=0, column=0, sticky=tk.NSEW, in_=self._maximized_view.home_widget  # type: ignore
+        )
+        self._maximized_view = None
+        self.get_variable("view.maximize_view").set(False)
+
     def show_options(self, page_key=None):
         dlg = ConfigurationDialog(self, self._configuration_pages)
         if page_key:
@@ -2720,6 +2228,12 @@ class Workbench(tk.Tk):
         var = self.get_variable("view.full_screen")
         var.set(not var.get())
         self.attributes("-fullscreen", var.get())
+
+    def _cmd_toggle_maximize_view(self) -> None:
+        if self._maximized_view is not None:
+            self._unmaximize_view()
+        else:
+            self._maximize_view()
 
     def _update_menu(self, menu: tk.Menu, menu_name: str) -> None:
         if menu.index("end") is None:
@@ -2794,9 +2308,14 @@ class Workbench(tk.Tk):
                 return
 
             while not self._ipc_requests.empty():
-                parsed_args = self._ipc_requests.get()
-                logger.info("Handling IPC request %r", parsed_args)
-                self._load_stuff_from_command_line(parsed_args)
+                args = self._ipc_requests.get()
+                try:
+                    for filename in args:
+                        if os.path.isfile(filename):
+                            self.get_editor_notebook().show_file(filename)
+
+                except Exception as e:
+                    logger.exception("Problem processing ipc request", exc_info=e)
 
             self.become_active_window()
         finally:
@@ -2807,12 +2326,10 @@ class Workbench(tk.Tk):
             return
 
         self._closing = True
-        self.shut_down_language_servers()
         try:
-
             self._save_layout()
             self._editor_notebook.remember_open_files()
-            self.event_generate("WorkbenchClose", widget=self)
+            self.event_generate("WorkbenchClose")
             self._configuration_manager.save()
             temp_dir = self.get_temp_dir(create_if_doesnt_exist=False)
             if os.path.exists(temp_dir):
@@ -2834,11 +2351,6 @@ class Workbench(tk.Tk):
         if self._lost_focus:
             self._lost_focus = False
             self.event_generate("WindowFocusIn")
-            os_dark_mode = os_is_in_dark_mode()
-            if self._os_dark_mode is not os_dark_mode:
-                self._os_dark_mode = os_dark_mode
-                if self.ready:
-                    self.reload_themes()
 
     def _on_focus_out(self, event):
         if self.focus_get() is None:
@@ -2853,15 +2365,8 @@ class Workbench(tk.Tk):
             # This may give error in Ubuntu
             return None
 
-    def is_closing(self):
-        return self._closing
-
     def destroy(self) -> None:
         try:
-            if self._event_polling_id is not None:
-                self.after_cancel(self._event_polling_id)
-                self._event_polling_id = None
-
             if self._is_server() and os.path.exists(thonny.get_ipc_file_path()):
                 os.remove(thonny.get_ipc_file_path())
 
@@ -2893,11 +2398,18 @@ class Workbench(tk.Tk):
             logger.exception("Error while destroying workbench")
 
         finally:
-            try:
-                super().destroy()
-            except:
-                logger.exception("Problem during close")
-                sys.exit(1)
+            super().destroy()
+
+    def _on_configure(self, event) -> None:
+        # called when window is moved or resized
+        if (
+            hasattr(self, "_maximized_view")  # configure may happen before the attribute is defined
+            and self._maximized_view  # type: ignore
+        ):
+            # grid again, otherwise it acts weird
+            self._maximized_view.grid(
+                row=1, column=0, sticky=tk.NSEW, in_=self._maximized_view.master  # type: ignore
+            )
 
     def _on_tk_exception(self, exc, val, tb) -> None:
         # copied from tkinter.Tk.report_callback_exception with modifications
@@ -2910,7 +2422,7 @@ class Workbench(tk.Tk):
             logger.info("Got KeyboardInterrupt, closing")
             self._on_close()
             return
-        self.report_exception(title="Internal Tk error")
+        self.report_exception()
 
     def report_exception(self, title: str = "Internal error") -> None:
         logger.exception(title)
@@ -2919,55 +2431,48 @@ class Workbench(tk.Tk):
             assert typ is not None
             if issubclass(typ, UserError):
                 msg = str(value)
-                status_prefix = ""
             else:
-                msg = f"{str(value) or type(value)}\nSee frontend.log for more details"
-                status_prefix = "INTERNAL ERROR: "
+                msg = traceback.format_exc()
 
-            try:
-                self.set_status_message(status_prefix + msg)
-                messagebox.showerror(
-                    title,
-                    msg,
-                    parent=tk._default_root,
-                )
-            except Exception:
-                logger.exception("Could not show internal error")
+            dlg = ui_utils.LongTextDialog(title, msg, parent=self)
+            ui_utils.show_dialog(dlg, self)
 
-    def _convert_view_id(self, view_id: str):
-        if view_id == "GlobalsView":
-            # was renamed in 2.2b5
-            return "VariablesView"
-        elif view_id == "MainFileBrowser":
-            # Was renamed in 3.1.1
-            return "FilesView"
-        else:
-            return view_id
-
-    def _restore_selected_views(self) -> None:
+    def _open_views(self) -> None:
         for nb_name in self._view_notebooks:
-            view_id = self._convert_view_id(
-                self.get_option("layout.notebook_" + nb_name + "_selected_view")
-            )
-            if view_id != None:
+            view_name = self.get_option("layout.notebook_" + nb_name + "_visible_view")
+            if view_name != None:
+                if view_name == "GlobalsView":
+                    # was renamed in 2.2b5
+                    view_name = "VariablesView"
+
                 if (
-                    self.get_ui_mode() != "simple" or view_id in SIMPLE_MODE_VIEWS
-                ) and view_id in self._view_records:
-                    self.show_view(view_id)
+                    self.get_ui_mode() != "simple" or view_name in SIMPLE_MODE_VIEWS
+                ) and view_name in self._view_records:
+                    self.show_view(view_name)
 
         # make sure VariablesView is at least loaded
         # otherwise it may miss globals events
         # and will show empty table on open
         self.get_view("VariablesView")
 
+        if (
+            self.get_option("assistance.open_assistant_on_errors")
+            or self.get_option("assistance.open_assistant_on_warnings")
+        ) and (self.get_ui_mode() != "simple" or "AssistantView" in SIMPLE_MODE_VIEWS):
+            self.get_view("AssistantView")
+
     def _save_layout(self) -> None:
         self.update_idletasks()
         self.set_option("layout.zoomed", ui_utils.get_zoomed(self))
 
         for nb_name in self._view_notebooks:
-            view = self._view_notebooks[nb_name].get_current_child()
-            view_name = None if view is None else type(view).__name__
-            self.set_option("layout.notebook_" + nb_name + "_selected_view", view_name)
+            widget = self._view_notebooks[nb_name].get_visible_child()
+            if hasattr(widget, "maximizable_widget"):
+                view = widget.maximizable_widget
+                view_name = type(view).__name__
+                self.set_option("layout.notebook_" + nb_name + "_visible_view", view_name)
+            else:
+                self.set_option("layout.notebook_" + nb_name + "_visible_view", None)
 
         if not ui_utils.get_zoomed(self) or running_on_mac_os():
             # can't restore zoom on mac without setting actual dimensions
@@ -2977,22 +2482,12 @@ class Workbench(tk.Tk):
             self.set_option("layout.left", int(gparts[2]))
             self.set_option("layout.top", int(gparts[3]))
 
-        if self._west_pw.winfo_ismapped():
-            self.set_option("layout.west_pw_width", self._west_pw.winfo_width())
-        if self._east_pw.winfo_ismapped():
-            self.set_option("layout.east_pw_width", self._east_pw.winfo_width())
-
-        for key in ["nw", "w", "sw", "s", "ne", "e", "se"]:
-            nb = self._view_notebooks[key]
-            pw = nb.master
-            assert isinstance(pw, WorkbenchPanedWindow)
-            # only store current height, if it is not the only visible child
-            if nb.winfo_ismapped() and pw.has_several_visible_panes():
-                close_height = nb.winfo_height()
-                self.set_option(
-                    "layout.%s_nb_height" % key,
-                    close_height,
-                )
+        self.set_option("layout.west_pw_width", self._west_pw.preferred_size_in_pw)
+        self.set_option("layout.east_pw_width", self._east_pw.preferred_size_in_pw)
+        for key in ["nw", "sw", "s", "se", "ne"]:
+            self.set_option(
+                "layout.%s_nb_height" % key, self._view_notebooks[key].preferred_size_in_pw
+            )
 
     def update_title(self, event=None) -> None:
         editor = self.get_editor_notebook().get_current_editor()
@@ -3000,21 +2495,15 @@ class Workbench(tk.Tk):
             title_text = "Portable Thonny"
         else:
             title_text = "Thonny"
-
-        profile = self.get_profile()
-        if profile != "default":
-            title_text += f" 〈 {profile} 〉 "
-        else:
-            title_text += "  -  "
-
         if editor is not None:
-            title_text += editor.get_long_description().replace(os.path.expanduser("~"), "~")
+            title_text += "  -  " + editor.get_long_description()
 
         self.title(title_text)
 
         if running_on_mac_os() and editor is not None:
-            if editor.is_local() and os.path.exists(editor.get_target_path()):
-                self.wm_attributes("-titlepath", editor.get_target_path())
+            current_file = editor.get_filename()
+            if current_file and is_local_path(current_file) and os.path.exists(current_file):
+                self.wm_attributes("-titlepath", current_file)
             else:
                 self.wm_attributes("-titlepath", "")
 
@@ -3042,20 +2531,16 @@ class Workbench(tk.Tk):
         else:
             self.focus_set()
 
-    def open_url(self, url: str) -> None:
-        if is_editor_supported_uri(url):
-            parts = url.rsplit("#", maxsplit=1)
-            if len(parts) == 1:
-                self.get_editor_notebook().show_file(url)
-            elif len(parts) == 2:
-                uri = parts[0]
-                loc_parts = parts[1].split(":")
-                lineno = int(loc_parts[0])
-                if len(loc_parts) > 1:
-                    col_offset = int(loc_parts[1])
-                else:
-                    col_offset = None
-                self.get_editor_notebook().show_file_at_line(uri, lineno, col_offset)
+    def open_url(self, url):
+        m = re.match(r"^thonny-editor://(.*?)(#(\d+)(:(\d+))?)?$", url)
+        if m is not None:
+            filename = m.group(1).replace("%20", " ")
+            lineno = None if m.group(3) is None else int(m.group(3))
+            col_offset = None if m.group(5) is None else int(m.group(5))
+            if lineno is None:
+                self.get_editor_notebook().show_file(filename)
+            else:
+                self.get_editor_notebook().show_file_at_line(filename, lineno, col_offset)
 
             return
 
@@ -3099,7 +2584,7 @@ class Workbench(tk.Tk):
         return self._toolbar
 
     def get_temp_dir(self, create_if_doesnt_exist=True):
-        path = os.path.join(get_thonny_user_dir(), "temp")
+        path = os.path.join(THONNY_USER_DIR, "temp")
         if create_if_doesnt_exist:
             os.makedirs(path, exist_ok=True)
         return path
@@ -3119,84 +2604,6 @@ class Workbench(tk.Tk):
 
     def iter_load_hooks(self):
         return iter(self._load_hooks)
-
-    def is_using_aqua_based_theme(self) -> bool:
-        return bool(lookup_style_option(".", "aqua_based", False))
-
-    def show_notebook_drop_targets(self):
-        from thonny.custom_notebook import NotebookTabDropTarget
-
-        if self._notebook_drop_targets:
-            # Already visible. Assuming the location and size of the Workbench hasn't changed during DND,
-            # so nothing to do.
-            return
-
-        positions = {
-            "nw": dict(relx=0.0, rely=0.0),
-            "w": dict(relx=0.0, rely=0.5),
-            "sw": dict(relx=0.0, rely=1.0),
-            "s": dict(relx=0.5, rely=1.0),
-            "se": dict(relx=1.0, rely=1.0),
-            "e": dict(relx=1.0, rely=0.5),
-            "ne": dict(relx=1.0, rely=0.0),
-        }
-
-        for key, nb in self._view_notebooks.items():
-            width = ems_to_pixels(3)
-            height = ems_to_pixels(8)
-            if key == "s":
-                width, height = height, width
-
-            target = NotebookTabDropTarget(master=self, notebook=nb, width=width, height=height)
-            pos = positions[key]
-            target.place(in_=self._main_pw, anchor=key, **pos)
-            self._notebook_drop_targets.append(target)
-
-    def hide_notebook_drop_targets(self):
-        for item in self._notebook_drop_targets:
-            item.destroy()
-
-        self._notebook_drop_targets = []
-
-    def select_another_tab(self, event: tk.Event) -> Optional[str]:
-        # handles also Shift-Control-Tab
-        # needs to be bound here because Notebooks don't own their contents
-        widget = self.focus_get()
-        while widget is not None:
-            nb: CustomNotebook = getattr(widget, "containing_notebook", None)
-            if nb is not None:
-                return nb.select_another_tab(event)
-            else:
-                widget_name = widget.winfo_parent()
-                if widget_name and widget_name != ".":
-                    widget = widget.nametowidget(widget_name)
-
-        return None
-
-    def _create_new_virtual_environment(self):
-        from thonny.venv_dialog import create_new_virtual_environment
-
-        created_exe = create_new_virtual_environment(self)
-        if created_exe is not None:
-            self.set_option("run.backend_name", "LocalCPython")
-            self.set_option("LocalCPython.executable", created_exe)
-            get_runner().restart_backend(False)
-
-    def _check_version_alignment(self):
-        # A smoke test and a guard against forgetting to update one of the 2 places during release
-        from importlib.metadata import version
-
-        try:
-            installation_version = version("thonny")
-        except Exception:
-            return
-        embedded_version = thonny.get_version()
-        if installation_version != embedded_version:
-            messagebox.showwarning(
-                "Warning",
-                f"Thonny's installation version is reported as {installation_version!r},\n"
-                + f"but embedded version is {embedded_version!r}.",
-            )
 
 
 class WorkbenchEvent(Record):

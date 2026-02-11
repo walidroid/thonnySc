@@ -11,10 +11,6 @@ from typing import Dict, Iterable, List, Optional, Type
 
 from thonny import get_runner, get_shell, get_workbench, ui_utils
 from thonny.base_file_browser import (
-    FILE_DIALOG_HEIGHT_EMS_OPTION,
-    FILE_DIALOG_ORDER_BY_OPTION,
-    FILE_DIALOG_REVERSE_ORDER_OPTION,
-    FILE_DIALOG_WIDTH_EMS_OPTION,
     HIDDEN_FILES_OPTION,
     BaseLocalFileBrowser,
     BaseRemoteFileBrowser,
@@ -63,29 +59,27 @@ class FilesView(tk.PanedWindow):
     def reset_remote(self, msg=None):
         runner = get_runner()
         if not runner:
-            logger.info("No runner in reset_remote")
             return
 
         proxy = runner.get_backend_proxy()
         if not proxy:
-            logger.info("No proxy in reset_remote")
             self.hide_remote()
             return
 
         if proxy.supports_remote_files():
+            # remote pane is needed
             if not self.remote_added:
-                logger.info("Adding remote browser")
                 self.add(self.remote_files, minsize=minsize)
                 self.remote_added = True
                 self.restore_split()
             self.remote_files.clear()
             self.remote_files.check_update_focus()
         else:
+            # remote pane not needed
             self.hide_remote()
 
     def hide_remote(self):
         if self.remote_added:
-            logger.info("Hiding remote browser")
             self.save_split()
             self.remove(self.remote_files)
             self.remote_added = False
@@ -105,7 +99,6 @@ class FilesView(tk.PanedWindow):
         self.sash_place(0, 0, split)
 
     def on_backend_restart(self, event):
-        logger.info("on_backend_restart, full=%r", event.get("full"))
         if event.get("full"):
             self.reset_remote(event)
 
@@ -239,11 +232,8 @@ class ActiveLocalFileBrowser(BaseLocalFileBrowser):
         super().add_middle_menu_items(context)
 
     def _get_venv_path(self):
-        path = self.get_selected_path()
-        if not path:
-            return None
-
         CFGFILE = "pyvenv.cfg"
+        path = self.get_selected_path()
         fnam = self.get_selected_name()
         try:
             if os.path.exists(path):
@@ -254,8 +244,8 @@ class ActiveLocalFileBrowser(BaseLocalFileBrowser):
                 else:
                     if fnam == CFGFILE:
                         return os.path.dirname(path)
-        except Exception:
-            logger.exception("_get_venv_path")
+        except Exception as ex:
+            logger.error("_get_venv_path", ex)
 
     def check_for_venv(self):
         return self._get_venv_path() is not None
@@ -292,7 +282,6 @@ class ActiveRemoteFileBrowser(BaseRemoteFileBrowser):
 
     def on_toplevel_response(self, msg):
         if not self.winfo_ismapped():
-            logger.info("ActiveRemoteFileBrowser not mapped on_toplevel_response")
             return
         if get_runner().get_backend_proxy().supports_remote_files():
             # pass cwd, as proxy may not yet know it
@@ -310,14 +299,8 @@ class ActiveRemoteFileBrowser(BaseRemoteFileBrowser):
             proxy = get_runner().get_backend_proxy()
             new_cwd = proxy.get_cwd()
 
-        if new_cwd is None:
-            logger.info("Can't update focus, proxy doesn't have cwd yet")
-        else:
-            if self.current_focus != new_cwd:
-                logger.info(
-                    "Changing focus, current_focus=%r, new_cwd=%r", self.current_focus, new_cwd
-                )
-                self.focus_into(new_cwd)
+        if self.current_focus != new_cwd:
+            self.focus_into(new_cwd)
 
     def request_new_focus(self, path):
         get_shell().submit_magic_command(["%cd", path if path != "" else "/"])
@@ -448,7 +431,7 @@ class DownloadDialog(TransferDialog):
             result.append(
                 {
                     "kind": source_item["kind"],
-                    "size_bytes": source_item["size_bytes"],
+                    "size": source_item["size"],
                     "source_path": source_path,
                     "target_path": transpose_path(
                         source_path, source_context_dir, target_dir, PurePosixPath, pathlib.Path
@@ -472,7 +455,7 @@ class DownloadDialog(TransferDialog):
 
                 result[target_path] = {
                     "kind": kind,
-                    "size_bytes": size,
+                    "size": size,
                 }
         return result
 
@@ -525,19 +508,19 @@ def pick_transfer_items(
                     % (item["target_path"], item["source_path"], target_info["kind"], item["kind"])
                 )
             elif item["kind"] == "file":
-                size_diff = item["size_bytes"] - target_info["size_bytes"]
+                size_diff = item["size"] - target_info["size"]
                 if size_diff > 0:
                     replacement = "a larger file (%s + %s)" % (
-                        sizeof_fmt(target_info["size_bytes"]),
+                        sizeof_fmt(target_info["size"]),
                         sizeof_fmt(size_diff),
                     )
                 elif size_diff < 0:
                     replacement = "a smaller file (%s - %s)" % (
-                        sizeof_fmt(target_info["size_bytes"]),
+                        sizeof_fmt(target_info["size"]),
                         sizeof_fmt(-size_diff),
                     )
                 else:
-                    replacement = "a file of same size (%s)" % sizeof_fmt(target_info["size_bytes"])
+                    replacement = "a file of same size (%s)" % sizeof_fmt(target_info["size"])
 
                 overwrites.append("'%s' with %s" % (item["target_path"], replacement))
 
@@ -546,8 +529,8 @@ def pick_transfer_items(
         return []
     elif overwrites:
         if askokcancel(
-            tr("Overwrite?"),
-            tr("This operation will overwrite %s") % format_items(overwrites) + "\n\n",
+            "Overwrite?",
+            "This operation will overwrite\n\n" + format_items(overwrites),
             master=master,
         ):
             return prepared_items
@@ -588,7 +571,7 @@ def prepare_upload_items(
     result = [
         {
             "kind": kind,
-            "size_bytes": size,
+            "size": size,
             "source_path": source_path,
             "target_path": transpose_path(
                 source_path, source_context_dir, target_dir, pathlib.Path, PurePosixPath
@@ -622,44 +605,23 @@ def load_plugin() -> None:
     )
 
     get_workbench().set_default(HIDDEN_FILES_OPTION, False)
-    get_workbench().set_default(FILE_DIALOG_ORDER_BY_OPTION, "name")
-    get_workbench().set_default(FILE_DIALOG_REVERSE_ORDER_OPTION, False)
-    get_workbench().set_default(FILE_DIALOG_WIDTH_EMS_OPTION, 60)
-    get_workbench().set_default(FILE_DIALOG_HEIGHT_EMS_OPTION, 35)
 
     get_workbench().add_view(FilesView, tr("Files"), "nw")
 
-    # NB! Keep these in lowercase
     for ext in [
         ".py",
         ".pyw",
         ".pyi",
-        ".pyde",
-        ".pyx",
         ".txt",
         ".log",
         ".json",
-        ".jsonl",
         ".yml",
         ".yaml",
         ".md",
         ".rst",
         ".toml",
-        ".tex",
         ".gitignore",
         ".env",
-        ".cfg",
-        ".lock",
-        ".python-version",
-        ".html",
-        ".htm",
-        ".js",
-        ".ts",
-        ".sh",
-        ".bat",
-        ".csv",
-        "metadata",
-        "record",
     ]:
         get_workbench().set_default(get_file_handler_conf_key(ext), "thonny")
 

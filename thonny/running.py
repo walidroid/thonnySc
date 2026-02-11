@@ -3,19 +3,16 @@
 """Code for maintaining the background process and for running
 user programs
 
-Commands get executed via shell, this way the command line in the
+Commands get executed via shell, this way the command line in the 
 shell becomes kind of title for the execution.
 
 """
 import collections
 import os.path
-import queue
 import re
 import shlex
-import shutil
 import subprocess
 import sys
-import threading
 import time
 import tkinter as tk
 import traceback
@@ -25,27 +22,24 @@ from logging import getLogger
 from threading import Thread
 from time import sleep
 from tkinter import messagebox, ttk
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union  # @UnusedImport; @UnusedImport
+from typing import Any, Callable, Dict, List, Optional, Set, Union  # @UnusedImport; @UnusedImport
 
 import thonny
 from thonny import (
+    THONNY_USER_DIR,
     common,
     get_runner,
     get_shell,
-    get_thonny_user_dir,
-    get_vendored_libs_dir,
     get_version,
     get_workbench,
     report_time,
 )
 from thonny.common import (
-    ALL_EXPLAINED_STATUS_CODE,
     PROCESS_ACK,
     BackendEvent,
     CommandToBackend,
     DebuggerCommand,
     DebuggerResponse,
-    DistInfo,
     EOFCommand,
     InlineCommand,
     InlineResponse,
@@ -59,26 +53,24 @@ from thonny.common import (
     path_startswith,
     read_one_incoming_message_str,
     serialize_message,
-    try_get_base_executable,
     universal_relpath,
     update_system_path,
 )
 from thonny.editors import (
+    extract_target_path,
     get_current_breakpoints,
-    get_saved_current_script_path,
-    get_target_dir_from_uri,
+    get_saved_current_script_filename,
+    get_target_dirname_from_editor_filename,
+    is_local_path,
+    is_remote_path,
 )
 from thonny.languages import tr
 from thonny.misc_utils import (
-    UNTITLED_URI_SCHEME,
     construct_cmd_line,
     inside_flatpak,
-    is_local_uri,
-    is_remote_uri,
     running_on_mac_os,
     running_on_windows,
     show_command_not_available_in_flatpak_message,
-    uri_to_target_path,
 )
 from thonny.ui_utils import select_sequence, show_dialog
 from thonny.workdlg import WorkDialog
@@ -96,9 +88,6 @@ INTERRUPT_SEQUENCE = "<Control-c>"
 
 CSI_TERMINATOR = re.compile("[@-~]")
 OSC_TERMINATOR = re.compile(r"\a|\x1B\\")
-
-TERMINATION_TIMEOUT = 2
-TERMINATION_POLL_INTERVAL = 0.02
 
 # other components may turn it on in order to avoid grouping output lines into one event
 io_animation_required = False
@@ -152,9 +141,6 @@ class Runner:
         self._publishing_events = False
         self._polling_after_id = None
         self._postponed_commands = []  # type: List[CommandToBackend]
-        self._thread_commands = queue.Queue()
-        self._thread_command_results = {}
-        self._running_thread_command_ids = set()
         self._last_accepted_backend_command = None
 
     def start(self) -> None:
@@ -166,11 +152,7 @@ class Runner:
             logger.exception("Problem allocating console")
             _console_allocated = False
 
-        try:
-            self.restart_backend(False, True)
-        except Exception as e:
-            logger.exception("Could not start backend when starting Runner")
-            get_shell().print_error(f"\nStarting the back-end failed with following error: {e}\n")
+        self.restart_backend(False, True)
 
     def _init_commands(self) -> None:
         global RUN_COMMAND_CAPTION, RUN_COMMAND_LABEL
@@ -286,17 +268,13 @@ class Runner:
         return self._proxy.get_sys_path()
 
     def send_command(self, cmd: CommandToBackend) -> None:
-        logger.info("Runner.send_command %r", cmd)
-        self._send_initial_or_queued_command(cmd)
-
-    def _send_initial_or_queued_command(self, cmd: CommandToBackend) -> None:
         if self._proxy is None:
             return
 
         if self._publishing_events:
             # allow all event handlers to complete before sending the commands
             # issued by first event handlers
-            self._postpone_command(cmd, "there are events to be published")
+            self._postpone_command(cmd)
             return
 
         # First sanity check
@@ -321,28 +299,17 @@ class Runner:
         cmd["local_cwd"] = get_workbench().get_local_cwd()
 
         if self._proxy.running_inline_command and isinstance(cmd, InlineCommand):
-            reason = "running another inline command"
-            cur_cmd_name = getattr(self._last_accepted_backend_command, "name", None)
-            if cur_cmd_name:
-                reason += f" ({cur_cmd_name})"
-            self._postpone_command(cmd, reason)
+            self._postpone_command(cmd)
             return
 
         # Offer the command
-        logger.debug("Runner: sending command %r to proxy: %s", cmd.name, cmd)
-        try:
-            response = self._proxy.send_command(cmd)
-        except Exception as e:
-            logger.exception("proxy raised exception for command")
-            get_shell().print_error(f"\nCommand {cmd.name} failed with following error: {e}\n")
-            return None
-        logger.debug("send_command response from proxy: %r", response)
+        logger.debug("RUNNER Sending: %s, %s", cmd.name, cmd)
+        response = self._proxy.send_command(cmd)
 
         if response == "discard":
-            logger.info("back-end discarded the command")
             return None
         elif response == "postpone":
-            self._postpone_command(cmd, "back-end requested postpone")
+            self._postpone_command(cmd)
             return
         else:
             assert response is None
@@ -363,41 +330,11 @@ class Runner:
         show_dialog(dlg)
         return dlg.response
 
-    def send_command_and_wait_in_thread(
-        self, cmd: InlineCommand, timeout: int
-    ) -> MessageFromBackend:
-        logger.info("Runner.send_command_and_wait_in_thread %r", cmd)
-        # should not send directly, as we're in thread
-        cmd_id = cmd.get("id")
-        if cmd_id is None:
-            cmd_id = generate_command_id()
-            cmd["id"] = cmd_id
-
-        start_time = time.time()
-        proxy_at_start = self._proxy
-
-        self._thread_commands.put(cmd)
-
-        while time.time() - start_time < timeout:
-            if self._proxy is not proxy_at_start:
-                raise RuntimeError("Backend restarted")
-            elif cmd_id in self._thread_command_results:
-                result = self._thread_command_results[cmd_id]
-                del self._thread_command_results[cmd_id]
-                return result
-            else:
-                time.sleep(0.1)
-        else:
-            raise TimeoutError(f"Could not receive response to {cmd} in {timeout} seconds")
-
-    def _postpone_command(self, cmd: CommandToBackend, reason: str) -> None:
-        logger.info("Postponing command. Reason: %s", reason)
-
+    def _postpone_command(self, cmd: CommandToBackend) -> None:
         # in case of InlineCommands, discard older same type command
         if isinstance(cmd, InlineCommand):
             for older_cmd in self._postponed_commands:
                 if older_cmd.name == cmd.name:
-                    logger.info("Discarding older command of same type")
                     self._postponed_commands.remove(older_cmd)
 
         if len(self._postponed_commands) > 10:
@@ -410,15 +347,8 @@ class Runner:
         self._postponed_commands = []
 
         for cmd in todo:
-            logger.info("Sending postponed command: %s", cmd)
-            self._send_initial_or_queued_command(cmd)
-
-    def _send_thread_commands(self) -> None:
-        while not self._thread_commands.empty():
-            cmd = self._thread_commands.get()
-            self._running_thread_command_ids.add(cmd["id"])
-            logger.info("Sending thread command: %s", cmd)
-            self._send_initial_or_queued_command(cmd)
+            # logger.debug("Sending postponed command: %s", cmd) # too much spam
+            self.send_command(cmd)
 
     def send_program_input(self, data: str) -> None:
         assert self.is_running()
@@ -497,9 +427,6 @@ class Runner:
                 get_shell().print_error("Could not interrupt current process. ")
                 wait_instructions = "Please wait, try again or select Stop/Restart!"
 
-                if not self._proxy:
-                    return
-
                 if self._proxy.stop_restart_kills_user_program():
                     get_shell().print_error("Forcing the program to stop.\n")
                     self.cmd_stop_restart()
@@ -520,41 +447,44 @@ class Runner:
         if not editor:
             return
 
-        UNTITLED = f"{UNTITLED_URI_SCHEME}:0"
-        if not editor.is_untitled() or not get_workbench().get_option(
+        UNTITLED = "<untitled>"
+        if editor.get_filename() or not get_workbench().get_option(
             "run.allow_running_unnamed_programs"
         ):
-            if not editor.is_untitled() and not editor.is_modified():
+            if editor.get_filename() and not editor.is_modified():
                 # Don't attempt to save as the file may be read-only
-                logger.debug("Not saving read only file %s", editor.get_uri())
-                uri = editor.get_uri()
+                logger.debug("Not saving read only file %s", editor.get_filename())
+                filename = editor.get_filename()
             else:
-                uri = editor.save_file()
-                if not uri:
+                filename = editor.save_file()
+                if not filename:
                     # user has cancelled file saving
                     return
         else:
-            uri = UNTITLED
+            filename = UNTITLED
 
         if not self._proxy:
             # Saving the file may have killed the proxy
             return
 
         if (
-            is_remote_uri(uri)
+            is_remote_path(filename)
             and not self._proxy.can_run_remote_files()
-            or is_local_uri(uri)
+            or is_local_path(filename)
             and not self._proxy.can_run_local_files()
-            or uri == UNTITLED
+            or filename == UNTITLED
         ):
             self.execute_editor_content(command_name, self._get_active_arguments())
         else:
             if get_workbench().get_option("run.auto_cd") and command_name[0].isupper():
-                working_directory = get_target_dir_from_uri(uri)
+                working_directory = get_target_dirname_from_editor_filename(filename)
             else:
                 working_directory = self._proxy.get_cwd()
 
-            target_path = uri_to_target_path(uri)
+            if is_local_path(filename):
+                target_path = filename
+            else:
+                target_path = extract_target_path(filename)
             self.execute_script(
                 target_path, self._get_active_arguments(), working_directory, command_name
             )
@@ -604,12 +534,12 @@ class Runner:
             show_command_not_available_in_flatpak_message()
             return
 
-        path = get_saved_current_script_path()
-        if not path:
+        filename = get_saved_current_script_filename()
+        if not filename:
             return
 
         self._proxy.run_script_in_terminal(
-            path,
+            filename,
             self._get_active_arguments(),
             get_workbench().get_option("run.run_in_terminal_python_repl"),
             get_workbench().get_option("run.run_in_terminal_keep_open"),
@@ -677,8 +607,7 @@ class Runner:
         proxy.disconnect()
 
     def disconnect_enabled(self):
-        proxy = self.get_backend_proxy()
-        return proxy is not None and proxy.needs_disconnect_button()
+        return hasattr(self.get_backend_proxy(), "disconnect")
 
     def ctrld(self):
         proxy = self.get_backend_proxy()
@@ -710,20 +639,12 @@ class Runner:
         if self._pull_backend_messages() is False:
             return
 
-        if self._proxy.has_next_message():
-            # Some events didn't fit into this batch. Start the next batch as soon as possible
-            self._polling_after_id = get_workbench().after_idle(self._poll_backend_messages)
-        else:
-            # take it easy
-            self._polling_after_id = get_workbench().after(
-                20, lambda: get_workbench().after_idle(self._poll_backend_messages)
-            )
+        self._polling_after_id = get_workbench().after(20, self._poll_backend_messages)
 
     def _pull_backend_messages(self):
         # Don't process too many messages in single batch, allow screen updates
         # and user actions between batches.
         # Mostly relevant when backend prints a lot quickly.
-        # TODO: Should I leave new messages (caused by processing this batch) for next batch?
         msg_count = 0
         max_msg_count = 10
         while self._proxy is not None and msg_count < max_msg_count:
@@ -731,11 +652,12 @@ class Runner:
                 msg = self._proxy.fetch_next_message()
                 if not msg:
                     break
-                logger.debug("RUNNER GOT: %s in state: %s", msg.event_type, self.get_state())
+                logger.debug(
+                    "RUNNER GOT: %s, %s in state: %s", msg.event_type, msg, self.get_state()
+                )
 
                 msg_count += 1
             except BackendTerminatedError as exc:
-                logger.info("Backend terminated with code: %r", exc.returncode)
                 self._handle_backend_termination(exc.returncode)
                 return False
 
@@ -750,40 +672,29 @@ class Runner:
             else:
                 "other messages don't affect the state"
 
-            command_id = msg.get("command_id")
-            if command_id in self._running_thread_command_ids:
-                self._running_thread_command_ids.remove(command_id)
-                self._thread_command_results[command_id] = msg
-            else:
-                # Publish the event
-                # NB! This may cause another command to be sent before we get to postponed commands
-                try:
-                    self._publishing_events = True
-                    class_event_type = type(msg).__name__
-                    get_workbench().event_generate(
-                        class_event_type, event=msg
-                    )  # more general event
-                    if msg.event_type != class_event_type:
-                        # more specific event
-                        get_workbench().event_generate(msg.event_type, event=msg)
-                finally:
-                    self._publishing_events = False
+            # Publish the event
+            # NB! This may cause another command to be sent before we get to postponed commands.
+            try:
+                self._publishing_events = True
+                class_event_type = type(msg).__name__
+                get_workbench().event_generate(class_event_type, event=msg)  # more general event
+                if msg.event_type != class_event_type:
+                    # more specific event
+                    get_workbench().event_generate(msg.event_type, event=msg)
+            finally:
+                self._publishing_events = False
 
             # TODO: is it necessary???
             # https://stackoverflow.com/a/13520271/261181
             # get_workbench().update()
 
-        self._send_thread_commands()
         self._send_postponed_commands()
 
-    def _handle_backend_termination(self, returncode: Optional[int]) -> None:
-        if returncode is None or returncode == ALL_EXPLAINED_STATUS_CODE:
-            err = ""
-        else:
-            err = f"Process ended with exit code {returncode}."
+    def _handle_backend_termination(self, returncode: int) -> None:
+        err = f"Process ended with exit code {returncode}."
 
         try:
-            faults_file = os.path.join(get_thonny_user_dir(), "backend_faults.log")
+            faults_file = os.path.join(THONNY_USER_DIR, "backend_faults.log")
             if os.path.exists(faults_file):
                 with open(faults_file, encoding="ASCII", errors="replace") as fp:
                     err += fp.read()
@@ -805,9 +716,6 @@ class Runner:
 
     def restart_backend(self, clean: bool, first: bool = False, automatic: bool = False) -> None:
         """Recreate (or replace) backend proxy / backend process."""
-        logger.info(
-            "Restarting back-end, clean: %r, first: %r, automatic: %r", clean, first, automatic
-        )
         was_running = self.is_running()
         self.destroy_backend()
         self._last_accepted_backend_command = None
@@ -820,8 +728,9 @@ class Runner:
         backend_class = get_workbench().get_backends()[backend_name].proxy_class
         self._set_state("running")
         self._proxy = None
-        logger.info("Starting backend %r", backend_class)
         self._proxy = backend_class(clean)
+
+        self._poll_backend_messages()
 
         if not first:
             get_shell().restart(automatic=automatic, was_running=was_running)
@@ -829,11 +738,7 @@ class Runner:
 
         get_workbench().event_generate("BackendRestart", full=True)
 
-        get_workbench().after_idle(self._poll_backend_messages)
-
     def destroy_backend(self, for_restart: bool = False) -> None:
-        logger.info("Destroying backend")
-
         if self._polling_after_id is not None:
             get_workbench().after_cancel(self._polling_after_id)
             self._polling_after_id = None
@@ -896,7 +801,7 @@ class Runner:
                     "Device is busy -- can't perform this action now."
                     + "\nPlease wait or cancel current work and try again!"
                 )
-            messagebox.showerror(tr("Can't complete"), msg, master=get_workbench())
+            messagebox.showerror("Can't complete", msg, master=get_workbench())
 
         return ready
 
@@ -925,12 +830,6 @@ class Runner:
         return (
             isinstance(self._proxy, (LocalCPythonProxy, SshCPythonProxy)) and self._proxy._in_venv
         )
-
-    def is_connected(self):
-        if self._proxy is None:
-            return False
-        else:
-            return self._proxy.is_connected()
 
 
 class BackendProxy(ABC):
@@ -961,9 +860,6 @@ class BackendProxy(ABC):
         """Send input data to backend"""
 
     @abstractmethod
-    def has_next_message(self) -> bool: ...
-
-    @abstractmethod
     def fetch_next_message(self):
         """Read next message from the queue or None if queue is empty"""
 
@@ -972,11 +868,11 @@ class BackendProxy(ABC):
         "backend's sys.path"
         ...
 
-    @abstractmethod
-    def get_board_id(self): ...
-
     def get_backend_name(self):
         return type(self).backend_name
+
+    def get_pip_gui_class(self):
+        return None
 
     @abstractmethod
     def interrupt(self):
@@ -991,30 +887,12 @@ class BackendProxy(ABC):
         ...
 
     @abstractmethod
-    def is_connected(self) -> bool:
-        """Returns True if the backend is operational.
-        Returns False if the connection is lost (or not created yet)
-        or the remote process has died (or not created yet).
-        """
+    def is_connected(self):
         ...
 
-    def disconnect(self):
-        """
-        Means different things for different backends.
-        For local CPython it does nothing (???).
-        For BareMetalMicroPython it means simply closing the serial connection.
-        For SSH back-ends it means closing the SSH connection.
-        """
-        pass
-
-    def needs_disconnect_button(self):
-        return False
-
     @abstractmethod
-    def has_local_interpreter(self): ...
-
-    @abstractmethod
-    def interpreter_is_cpython_compatible(self) -> bool: ...
+    def has_local_interpreter(self):
+        ...
 
     @abstractmethod
     def get_target_executable(self) -> Optional[str]:
@@ -1055,7 +933,8 @@ class BackendProxy(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def can_debug(self) -> bool: ...
+    def can_debug(self) -> bool:
+        ...
 
     def ready_for_remote_file_operations(self):
         return False
@@ -1075,13 +954,14 @@ class BackendProxy(ABC):
 
     @classmethod
     @abstractmethod
-    def get_switcher_entries(cls) -> List[Tuple[Dict[str, Any], str, str]]:
+    def get_switcher_entries(cls):
         """
         Each returned entry creates one item in the backend switcher menu.
         """
 
     @abstractmethod
-    def can_run_in_terminal(self) -> bool: ...
+    def can_run_in_terminal(self) -> bool:
+        ...
 
     def run_script_in_terminal(self, script_path, args, interactive, keep_open):
         raise NotImplementedError()
@@ -1092,94 +972,15 @@ class BackendProxy(ABC):
     def open_custom_system_shell(self) -> None:
         raise NotImplementedError()
 
-    def get_package_installation_confirmations(self, dist_info: DistInfo) -> List[str]:
-        if "thonny" in dist_info.name.lower():
-            return [
-                tr(
-                    "Looks like you are installing a Thonny-related package.\n"
-                    + "If you meant to install a Thonny plugin, then you should\n"
-                    + "choose 'Tools → Manage plugins...' instead\n"
-                    + "\n"
-                    + "Are you sure you want to install %s for the back-end?"
-                )
-                % dist_info.name
-            ]
-
-        return []
-
-    def supports_packages(self) -> bool:
-        return True
-
-    @abstractmethod
-    def get_packages_target_dir_with_comment(self) -> Tuple[Optional[str], Optional[str]]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def can_install_packages_from_files(self) -> bool:
-        raise NotImplementedError()
-
-    def get_externally_managed_message(self) -> str:
-        return (
-            tr("The packages of this interpreter can be managed via your system package manager.")
-            + "\n"
-            + tr("For pip-installing a package, you need to use a virtual environment.")
-        )
-
-    def normalize_target_path(self, path: str) -> str:
-        return path
-
-    @classmethod
-    def search_packages(cls, query: str) -> List[DistInfo]:
-        from thonny.plugins.pip_gui import perform_pypi_search
-
-        return perform_pypi_search(
-            query, get_workbench().get_data_url("pypi_summaries_cpython.json"), []
-        )
-
-    @classmethod
-    def get_package_info_from_index(cls, name: str, version: str) -> DistInfo:
-        from thonny.plugins.pip_gui import download_dist_info_from_pypi
-
-        return download_dist_info_from_pypi(name, version)
-
-    @classmethod
-    def get_version_list_from_index(cls, name: str) -> List[str]:
-        from thonny.plugins.pip_gui import try_download_version_list_from_pypi
-
-        return try_download_version_list_from_pypi(name)
-
-    def get_search_button_text(self) -> str:
-        return tr("Search on PyPI")
-
-    @classmethod
-    def get_vendored_user_stubs_ids(cls) -> List[str]:
-        return []
-
-    @classmethod
-    def get_user_stubs_location(cls) -> str:
-        result_path = os.path.join(thonny.get_thonny_user_dir(), "stubs", cls.backend_name)
-        if not os.path.exists(result_path):
-            # copy default stubs to user editable location on the first request
-            os.makedirs(result_path)
-            for vendored_id in cls.get_vendored_user_stubs_ids():
-                vendored_path = os.path.join(get_vendored_libs_dir(), vendored_id)
-                for item_name in os.listdir(vendored_path):
-                    full_item_path = os.path.join(vendored_path, item_name)
-                    if os.path.isdir(full_item_path):
-                        shutil.copytree(full_item_path, os.path.join(result_path, item_name))
-                    else:
-                        shutil.copy(full_item_path, os.path.join(result_path, item_name))
-        return result_path
-
-    def get_machine_id(self) -> str:
-        return "localhost"
-
 
 class SubprocessProxy(BackendProxy, ABC):
-    def __init__(self, clean: bool) -> None:
+    def __init__(self, clean: bool, mgmt_executable: Optional[str] = None) -> None:
         super().__init__(clean)
 
-        self._mgmt_executable = self.compute_mgmt_executable()
+        if mgmt_executable:
+            self._mgmt_executable = mgmt_executable
+        else:
+            self._mgmt_executable = get_front_interpreter_for_subprocess()
 
         if ".." in self._mgmt_executable:
             self._mgmt_executable = os.path.normpath(self._mgmt_executable)
@@ -1189,7 +990,6 @@ class SubprocessProxy(BackendProxy, ABC):
         self._proc = None
         self._response_queue = None
         self._sys_path = []
-        self._board_id: Optional[str] = None
         self._usersitepackages = None
         self._externally_managed = None
         self._reported_executable = None
@@ -1198,9 +998,6 @@ class SubprocessProxy(BackendProxy, ABC):
         self._cwd = self._get_initial_cwd()  # pylint: disable=assignment-from-none
         self._start_background_process(clean=clean)
         self._have_check_remembered_current_configuration = False
-
-    def compute_mgmt_executable(self) -> str:
-        return get_front_interpreter_for_subprocess()
 
     def _check_remember_current_configuration(self) -> None:
         current_configuration = self.get_current_switcher_configuration()
@@ -1250,10 +1047,8 @@ class SubprocessProxy(BackendProxy, ABC):
         # see https://github.com/thonny/thonny/issues/808
         env["PYTHONUNBUFFERED"] = "1"
 
-        env["PYTHONSAFEPATH"] = "1"
-
         # Let back-end know about plug-ins
-        env["THONNY_USER_DIR"] = get_thonny_user_dir()
+        env["THONNY_USER_DIR"] = THONNY_USER_DIR
         env["THONNY_FRONTEND_SYS_PATH"] = repr(sys.path)
 
         env["THONNY_LANGUAGE"] = get_workbench().get_option("general.language")
@@ -1265,29 +1060,23 @@ class SubprocessProxy(BackendProxy, ABC):
             del env["THONNY_DEBUG"]
         return env
 
-    def get_mgmt_executable_special_switches(self) -> List[str]:
-        return []
-
-    def get_mgmt_executable_python_switches(self) -> List[str]:
-        return [
-            "-u",  # unbuffered IO
-            "-B",  # don't write pyo/pyc files
-            # (to avoid problems when using different Python versions without write permissions)
-        ]
-
     def _start_background_process(self, clean=None, extra_args=[]):
         # deque, because in one occasion I need to put messages back
-        logger.info("Starting background process, clean: %r, extra_args: %r", clean, extra_args)
         self._response_queue = collections.deque()
 
-        exe_validation_error = self.get_mgmt_executable_validation_error()
-        if exe_validation_error:
-            raise RuntimeError(exe_validation_error)
+        if not os.path.exists(self._mgmt_executable):
+            get_shell().print_error(
+                f"Interpreter {self._mgmt_executable!r} not found.\nPlease select another!"
+            )
+            return
 
         cmd_line = (
-            [self._mgmt_executable]
-            + self.get_mgmt_executable_special_switches()
-            + self.get_mgmt_executable_python_switches()
+            [
+                self._mgmt_executable,
+                "-u",  # unbuffered IO
+                "-B",  # don't write pyo/pyc files
+                # (to avoid problems when using different Python versions without write permissions)
+            ]
             + self._get_launcher_with_args()
             + extra_args
         )
@@ -1297,7 +1086,7 @@ class SubprocessProxy(BackendProxy, ABC):
 
         creationflags = 0
         if running_on_windows():
-            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
 
         logger.info("Starting the backend: %s %s", cmd_line, get_workbench().get_local_cwd())
 
@@ -1316,44 +1105,20 @@ class SubprocessProxy(BackendProxy, ABC):
         )
 
         # read success acknowledgement
-        stdout_line = self._proc.stdout.readline().strip("\r\n")
+        ack = self._proc.stdout.readline()
+
+        # setup asynchronous output listeners
+        Thread(target=self._listen_stdout, args=(self._proc.stdout,), daemon=True).start()
+        Thread(target=self._listen_stderr, args=(self._proc.stderr,), daemon=True).start()
 
         # only attempt initial input if process started nicely,
         # otherwise can't read the error from stderr
-        if stdout_line == PROCESS_ACK:
-            # setup asynchronous output listeners
-            Thread(target=self._listen_stdout, args=(self._proc.stdout,), daemon=True).start()
-            Thread(target=self._listen_stderr, args=(self._proc.stderr,), daemon=True).start()
-
+        if ack.strip() == PROCESS_ACK:
             self._send_initial_input()
         else:
-            # Wait a moment for the process to finish so we can capture its error output
-            import time
-            time.sleep(0.5)
-
-            return_code = self._proc.poll()
-            err = ""
-            try:
-                if return_code is not None:
-                    err = self._proc.stderr.read()
-                else:
-                    # Process still running but didn't send ACK - try to read available stderr
-                    self._proc.kill()
-                    self._proc.wait(timeout=2)
-                    err = self._proc.stderr.read()
-            except Exception:
-                pass
-
-            if err:
-                get_shell().print_error(err)
-
-            raise RuntimeError(
-                f"Could not start back-end process, got {stdout_line!r} instead of {PROCESS_ACK!r}"
+            get_shell().print_error(
+                f"INTERNAL ERROR, got {ack!r} instead of {PROCESS_ACK!r}\n---\n"
             )
-
-    def get_mgmt_executable_validation_error(self) -> Optional[str]:
-        if not os.path.isfile(self._mgmt_executable):
-            return f"INTERNAL ERROR: interpreter {self._mgmt_executable!r} not found."
 
     def _send_initial_input(self) -> None:
         # Used for sending data sending for startup, which can't be send by other means
@@ -1389,15 +1154,8 @@ class SubprocessProxy(BackendProxy, ABC):
             logger.warning("Ignoring command without active backend process")
             return
 
-        try:
-            self._proc.stdin.write(serialize_message(msg) + "\n")
-            self._proc.stdin.flush()
-        except BrokenPipeError:
-            import traceback
-
-            traceback.print_stack()
-            logger.exception("Could not write message or flush")
-            get_shell().print_error(f"Could not perform {type(msg).__name__}")
+        self._proc.stdin.write(serialize_message(msg) + "\n")
+        self._proc.stdin.flush()
 
     def _prepare_clean_launch(self):
         pass
@@ -1417,27 +1175,13 @@ class SubprocessProxy(BackendProxy, ABC):
     def get_sys_path(self):
         return self._sys_path
 
-    def get_board_id(self):
-        return self._board_id
-
     def destroy(self, for_restart: bool = False):
         self._close_backend()
 
     def _close_backend(self):
         if self._proc is not None and self._proc.poll() is None:
-            logger.info("Trying to terminate backend process")
-            self._proc.terminate()
-            # Wait a bit
-            for i in range(int(TERMINATION_TIMEOUT / TERMINATION_POLL_INTERVAL)):
-                time.sleep(TERMINATION_POLL_INTERVAL)
-                if self._proc.poll() is not None:
-                    logger.info("Terminated in %s seconds", (i + 1) * TERMINATION_POLL_INTERVAL)
-                    break
-            else:
-                logger.info(
-                    "Could terminate backend process in %s seconds. Will kill.", TERMINATION_TIMEOUT
-                )
-                self._proc.kill()
+            logger.info("Killing backend process")
+            self._proc.kill()
 
         self._proc = None
         self._response_queue = None
@@ -1504,13 +1248,11 @@ class SubprocessProxy(BackendProxy, ABC):
         while True:
             data = read_one_incoming_message_str(stderr.readline)
             if data == "":
-                logger.info("Reached end of STDERR")
                 break
             else:
                 self._response_queue.append(
                     BackendEvent("ProgramOutput", stream_name="stderr", data=data)
                 )
-                logger.error("STDERR: %r", data)
 
     def _store_state_info(self, msg):
         if "cwd" in msg:
@@ -1526,14 +1268,6 @@ class SubprocessProxy(BackendProxy, ABC):
         if "sys_path" in msg:
             self._sys_path = msg["sys_path"]
 
-        if msg.get("board_id", None) is not None:
-            logger.info("Got board_id: %r", msg["board_id"])
-            if self._board_id != msg["board_id"]:
-                self._board_id = msg["board_id"]
-                did_change_stubs = self._check_set_board_specific_stubs(self._board_id)
-                if did_change_stubs:
-                    get_workbench().start_or_restart_language_servers()
-
         if "usersitepackages" in msg:
             self._usersitepackages = msg["usersitepackages"]
 
@@ -1548,55 +1282,6 @@ class SubprocessProxy(BackendProxy, ABC):
 
         if msg.get("executable"):
             self._reported_executable = msg["executable"]
-
-        if msg.get("base_executable"):
-            self._reported_base_executable = msg["base_executable"]
-
-        if "logfile" in msg:
-            logger.info("Back-end reported logfile: %s", msg["logfile"])
-
-    def _check_set_board_specific_stubs(self, board_id: str) -> bool:
-        user_stubs_location = self.get_user_stubs_location()
-        if user_stubs_location is None:
-            return False
-
-        logger.debug("Trying to set up board specific stubs for %r", board_id)
-
-        specific_board_path = os.path.join(
-            user_stubs_location, "board_definitions", board_id, "__init__.pyi"
-        )
-        if not os.path.exists(specific_board_path):
-            logger.debug("Board path %r does not exist", specific_board_path)
-            return False
-
-        # replace in both stdlib and in plain packages, as different language servers may use different precedences
-        did_replace = False
-        for target_path in [
-            os.path.join(user_stubs_location, "board", "__init__.pyi"),
-            os.path.join(user_stubs_location, "stdlib", "board", "__init__.pyi"),
-        ]:
-
-            if not os.path.exists(target_path):
-                continue
-
-            files_are_identical = True
-            with open(specific_board_path, "br") as f1, open(target_path, "br") as f2:
-                while True:
-                    line1 = f1.readline()
-                    line2 = f2.readline()
-                    if line1 == b"" and line2 == b"":
-                        break
-
-                    if line1 != line2:
-                        files_are_identical = False
-                        break
-
-            if not files_are_identical:
-                logger.info("Copying %r over %r", specific_board_path, target_path)
-                shutil.copy(specific_board_path, target_path)
-                did_replace = True
-
-        return did_replace
 
     def _publish_cwd(self, cwd):
         if self.uses_local_filesystem():
@@ -1623,14 +1308,8 @@ class SubprocessProxy(BackendProxy, ABC):
         return self._exe_dirs
 
     def can_be_isolated(self) -> bool:
-        """Says whether the backend may be launched with -s switch"""
+        """Says whether the backend may be launched with -I switch"""
         return True
-
-    def has_next_message(self) -> bool:
-        if self.is_terminated():
-            return False
-
-        return len(self._response_queue) > 0
 
     def fetch_next_message(self):
         if not self._response_queue or len(self._response_queue) == 0:
@@ -1705,7 +1384,6 @@ def create_frontend_python_process(
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     environment_extras: Optional[Dict[str, str]] = None,
-    universal_newlines: bool = True,
 ):
     """Used for running helper commands (eg. for installing plug-ins on by the plug-ins)"""
     if _console_allocated:
@@ -1717,9 +1395,7 @@ def create_frontend_python_process(
     env["PYTHONUNBUFFERED"] = "1"
     if environment_extras is not None:
         env.update(environment_extras)
-    return _create_python_process(
-        python_exe, args, stdin, stdout, stderr, env=env, universal_newlines=universal_newlines
-    )
+    return _create_python_process(python_exe, args, stdin, stdout, stderr, env=env)
 
 
 def _create_python_process(
@@ -1735,7 +1411,7 @@ def _create_python_process(
     cmd = [python_exe] + args
 
     if running_on_windows():
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     else:
@@ -1765,7 +1441,22 @@ class BackendTerminatedError(Exception):
 
 
 def is_venv_interpreter_of_current_interpreter(executable):
-    return try_get_base_executable(executable) == sys.executable
+    for location in ["..", "."]:
+        cfg_path = os.path.join(os.path.dirname(executable), location, "pyvenv.cfg")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path) as fp:
+                content = fp.read()
+            for line in content.splitlines():
+                if line.replace(" ", "").startswith("home="):
+                    _, home = line.split("=", maxsplit=1)
+                    home = home.strip()
+                    if os.path.isdir(home) and (
+                        is_same_path(home, sys.prefix)
+                        or is_same_path(home, os.path.join(sys.prefix, "bin"))
+                        or is_same_path(home, os.path.join(sys.prefix, "Scripts"))
+                    ):
+                        return True
+    return False
 
 
 def get_environment_for_python_subprocess(target_executable) -> Dict[str, str]:
@@ -1788,8 +1479,8 @@ def get_environment_with_overrides(overrides):
 
 
 def get_environment_overrides_for_python_subprocess(target_executable):
-    """Take care of not confusing different interpreter
-    with variables meant for frontend interpreter"""
+    """Take care of not not confusing different interpreter
+    with variables meant for bundled interpreter"""
 
     # At the moment I'm tweaking the environment only if current
     # exe is bundled for Thonny.
@@ -1845,7 +1536,6 @@ def get_environment_overrides_for_python_subprocess(target_executable):
         "PYTHONDEBUG",
         "PYTHONNOUSERSITE",
         "PYTHONASYNCIODEBUG",
-        "VIRTUAL_ENV",
     ]:
         if key in os.environ:
             result[key] = None
@@ -1867,14 +1557,12 @@ def construct_cd_command(path) -> str:
 
 
 _command_id_counter = 0
-_command_id_counter_lock = threading.Lock()
 
 
 def generate_command_id():
     global _command_id_counter
-    with _command_id_counter_lock:
-        _command_id_counter += 1
-        return "cmd_" + str(_command_id_counter)
+    _command_id_counter += 1
+    return "cmd_" + str(_command_id_counter)
 
 
 class InlineCommandDialog(WorkDialog):
@@ -1992,16 +1680,6 @@ def get_frontend_python():
 
 
 def get_front_interpreter_for_subprocess(candidate=None):
-    # In frozen mode (PyInstaller), use bundled Python instead of Thonny.exe
-    if getattr(sys, 'frozen', False):
-        app_dir = os.path.dirname(sys.executable)
-        bundled_python = os.path.join(app_dir, "Python", "python.exe")
-        if os.path.exists(bundled_python):
-            logger.info("Using bundled Python for subprocess: %s", bundled_python)
-            return bundled_python
-        else:
-            logger.warning("Bundled Python not found at %s, using sys.executable", bundled_python)
-    
     if candidate is None:
         candidate = sys.executable
 

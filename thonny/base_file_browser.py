@@ -1,38 +1,28 @@
+import datetime
 import os.path
 import shutil
+import stat
+import subprocess
 import time
 import tkinter as tk
-from abc import ABC
 from logging import getLogger
 from tkinter import messagebox, simpledialog, ttk
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional
 
 from thonny import get_runner, get_workbench, misc_utils, tktextext
 from thonny.common import InlineCommand, UserError, get_dirs_children_info
 from thonny.languages import tr
-from thonny.misc_utils import (
-    format_date_and_time_compact,
-    get_menu_char,
-    get_os_level_favorite_folders,
-    is_local_project_dir,
-    is_local_venv_dir,
-    running_on_windows,
-    sizeof_fmt,
-)
+from thonny.misc_utils import get_menu_char, running_on_mac_os, running_on_windows, sizeof_fmt
 from thonny.ui_utils import (
     CommonDialog,
-    CustomToolbutton,
-    MappingCombobox,
     ask_one_from_choices,
     ask_string,
-    check_create_aqua_scrollbar_stripe,
-    create_action_label,
     create_string_var,
     ems_to_pixels,
     get_hyperlink_cursor,
     lookup_style_option,
     open_with_default_app,
-    pixels_to_ems,
+    scrollbar_style,
     show_dialog,
 )
 
@@ -42,32 +32,21 @@ _LOCAL_FILES_ROOT_TEXT = ""  # needs to be initialized later
 ROOT_NODE_ID = ""
 
 HIDDEN_FILES_OPTION = "file.show_hidden_files"
-FILE_DIALOG_ORDER_BY_OPTION = "file.dialog_order_by"
-FILE_DIALOG_REVERSE_ORDER_OPTION = "file.dialog_reverse_order"
-FILE_DIALOG_WIDTH_EMS_OPTION = "file.dialog_width_ems"
-FILE_DIALOG_HEIGHT_EMS_OPTION = "file.dialog_height_ems"
 
 logger = getLogger(__name__)
 
 
 class BaseFileBrowser(ttk.Frame):
-    def __init__(
-        self, master, show_expand_buttons=True, order_by: str = "name", reverse_order: bool = False
-    ):
+    def __init__(self, master, show_expand_buttons=True):
         self.show_expand_buttons = show_expand_buttons
-        self._cached_child_data: Dict[str, Dict[str, Any]] = {}
+        self._cached_child_data = {}
         self.path_to_highlight = None
-        self.order_by = order_by
-        self.reverse_order = reverse_order
-        self.filter: Optional[List[str]] = None
 
         ttk.Frame.__init__(self, master, borderwidth=0, relief="flat")
-        self.vert_scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL)
+        self.vert_scrollbar = ttk.Scrollbar(
+            self, orient=tk.VERTICAL, style=scrollbar_style("Vertical")
+        )
         self.vert_scrollbar.grid(row=0, column=1, sticky=tk.NSEW, rowspan=3)
-        stripe = check_create_aqua_scrollbar_stripe(self)
-        if stripe is not None:
-            stripe.grid(row=0, column=1, sticky="nse", rowspan=3)
-            stripe.tkraise()
 
         tktextext.fixwordbreaks(tk._default_root)
         self.building_breadcrumbs = False
@@ -78,16 +57,7 @@ class BaseFileBrowser(ttk.Frame):
 
         self.tree = ttk.Treeview(
             self,
-            columns=[
-                "#0",
-                "kind",
-                "path",
-                "name",
-                "modified_fmt",
-                "size_fmt",
-                "modified_epoch",
-                "size_bytes",
-            ],
+            columns=["#0", "kind", "path", "name", "modified", "size"],
             displaycolumns=(
                 # 4,
                 # 5
@@ -95,8 +65,6 @@ class BaseFileBrowser(ttk.Frame):
             yscrollcommand=self.vert_scrollbar.set,
             selectmode="extended",
         )
-        self.tree.tag_configure("project", font="BoldTkDefaultFont")
-        self.tree.tag_configure("venv", font="ItalicTkDefaultFont")
         self.tree.grid(row=2, column=0, sticky=tk.NSEW)
         self.vert_scrollbar["command"] = self.tree.yview
         self.columnconfigure(0, weight=1)
@@ -121,28 +89,22 @@ class BaseFileBrowser(ttk.Frame):
         self.hard_drive_icon = wb.get_image("hard-drive")
 
         self.tree.column("#0", width=200, anchor=tk.W)
-        self.tree.heading(
-            "#0", text=tr("Name"), anchor=tk.W, command=lambda: self.on_heading_click("name")
-        )
-        self.tree.column("modified_fmt", width=60, anchor=tk.E)
-        self.tree.heading(
-            "modified_fmt",
-            text=tr("Modified"),
-            anchor=tk.E,
-            command=lambda: self.on_heading_click("modified"),
-        )
-        self.tree.column("size_fmt", width=40, anchor=tk.E)
-        self.tree.heading(
-            "size_fmt", text=tr("Size"), anchor=tk.E, command=lambda: self.on_heading_click("size")
-        )
-        self._update_heading_labels()
+        self.tree.heading("#0", text=tr("Name"), anchor=tk.W)
+        self.tree.column("modified", width=60, anchor=tk.W)
+        self.tree.heading("modified", text=tr("Modified"), anchor=tk.W)
+        self.tree.column("size", width=40, anchor=tk.E)
+        self.tree.heading("size", text=tr("Size (bytes)"), anchor=tk.E)
+        self.tree.column("kind", width=30, anchor=tk.W)
+        #         self.tree.heading("kind", text="Kind")
+        #         self.tree.column("path", width=300, anchor=tk.W)
+        #         self.tree.heading("path", text="path")
+        #         self.tree.column("name", width=60, anchor=tk.W)
+        #         self.tree.heading("name", text="name")
 
         # set-up root node
         self.tree.set(ROOT_NODE_ID, "kind", "root")
         self.menu = tk.Menu(self.tree, tearoff=False)
         self.current_focus = None
-
-        self._on_theme_changed_binding = self.bind("<<ThemeChanged>>", self.on_theme_changed, True)
 
     def init_header(self, row, column):
         header_frame = ttk.Frame(self, style="ViewToolbar.TFrame")
@@ -160,16 +122,15 @@ class BaseFileBrowser(ttk.Frame):
             pady=ems_to_pixels(0.5),
             insertwidth=0,
             highlightthickness=0,
-            background=self.get_path_bar_background(),
-            foreground=self.get_label_foreground(),
+            background=lookup_style_option("ViewToolbar.TFrame", "background"),
         )
 
         self.path_bar.grid(row=0, column=0, sticky="nsew")
         self.path_bar.set_read_only(True)
         self.path_bar.bind("<Configure>", self.resize_path_bar, True)
-        self.path_bar.tag_configure("dir", foreground=self.get_url_foreground())
-        self.path_bar.tag_configure("project", font="BoldTkDefaultFont")
-        self.path_bar.tag_configure("venv", font="ItalicTkDefaultFont")
+        self.path_bar.tag_configure(
+            "dir", foreground=lookup_style_option("Url.TLabel", "foreground")
+        )
         self.path_bar.tag_configure("underline", underline=True)
 
         def get_dir_range(event):
@@ -211,10 +172,10 @@ class BaseFileBrowser(ttk.Frame):
         self.path_bar.tag_bind("dir", "<Motion>", dir_tag_motion)
 
         # self.menu_button = ttk.Button(header_frame, text="≡ ", style="ViewToolbar.Toolbutton")
-        self.menu_button = CustomToolbutton(
+        self.menu_button = ttk.Button(
             header_frame,
-            style="ViewToolbar.Toolbutton",
             text=f" {get_menu_char()} ",
+            style="ViewToolbar.Toolbutton",
             command=self.post_button_menu,
         )
         # self.menu_button.grid(row=0, column=1, sticky="ne")
@@ -234,7 +195,6 @@ class BaseFileBrowser(ttk.Frame):
         return self.focus_into(path)
 
     def focus_into(self, path):
-        logger.info("focus_into %r", path)
         self.clear_error()
         self.invalidate_cache()
 
@@ -262,13 +222,7 @@ class BaseFileBrowser(ttk.Frame):
                     self.path_bar.direct_insert("end", self.get_dir_separator())
                     self.path_bar.window_create("end", window=create_spacer())
 
-                tags = ("dir",)
-                partial_path = self.path_bar.get("2.0", "end").strip() + part
-                if self.is_project_dir(partial_path):
-                    tags += ("project",)
-                elif self.is_venv_dir(partial_path):
-                    tags += ("venv",)
-                self.path_bar.direct_insert("end", part, tags=tags)
+                self.path_bar.direct_insert("end", part, tags=("dir",))
 
         self.building_breadcrumbs = False
         self.resize_path_bar()
@@ -417,7 +371,7 @@ class BaseFileBrowser(ttk.Frame):
                         child_data["label"] = child_name
 
                     if "isdir" not in child_data:
-                        child_data["isdir"] = child_data.get("size_bytes", 0) is None
+                        child_data["isdir"] = child_data.get("size", 0) is None
             else:
                 assert children_data is None
 
@@ -502,11 +456,6 @@ class BaseFileBrowser(ttk.Frame):
         elif children_data is None:
             raise RuntimeError("None data for %s" % path)
         else:
-            children_data = {
-                name: atts
-                for (name, atts) in children_data.items()
-                if self.item_matches_filter(name, atts)
-            }
             fs_children_names = children_data.keys()
             tree_children_ids = self.tree.get_children(node_id)
 
@@ -523,49 +472,24 @@ class BaseFileBrowser(ttk.Frame):
             # add missing children
             for name in fs_children_names:
                 if name not in children:
-                    child_path = self.join(path, name)
-                    if self.is_project_dir(child_path):
-                        tags = ("project",)
-                    elif self.is_venv_dir(child_path):
-                        tags = "venv"
-                    else:
-                        tags = ()
-                    child_id = self.tree.insert(node_id, "end", tags=tags)
+                    child_id = self.tree.insert(node_id, "end")
                     children[name] = child_id
-                    self.tree.set(children[name], "path", child_path)
+                    self.tree.set(children[name], "path", self.join(path, name))
                     self.update_node_data(child_id, name, children_data[name])
 
             def file_order(name):
                 # items in a folder should be ordered so that
                 # folders come first and names are ordered case insensitively
-                if self.order_by == "size":
-                    return (
-                        not children_data[name]["isdir"],  # prefer directories
-                        not ":" in name,  # prefer drives
-                        children_data[name]["size_bytes"],
-                        name.upper(),
-                        name,
-                    )
-                elif self.order_by == "modified":
-                    return (
-                        -children_data[name]["modified_epoch"],  # prefer newer files
-                        name.upper(),
-                        name,
-                    )
-                else:
-                    return (
-                        not children_data[name]["isdir"],  # prefer directories
-                        not ":" in name,  # prefer drives
-                        name.upper(),
-                        name,
-                    )
+                return (
+                    not children_data[name]["isdir"],  # prefer directories
+                    not ":" in name,  # prefer drives
+                    name.upper(),
+                    name,
+                )
 
             # update tree
             ids_sorted_by_name = list(
-                map(
-                    lambda key: children[key],
-                    sorted(children.keys(), key=file_order, reverse=self.reverse_order),
-                )
+                map(lambda key: children[key], sorted(children.keys(), key=file_order))
             )
             self.tree.set_children(node_id, *ids_sorted_by_name)
 
@@ -591,27 +515,20 @@ class BaseFileBrowser(ttk.Frame):
 
         path = self.tree.set(node_id, "path")
 
-        if data.get("modified_epoch"):
+        if data.get("modified"):
             try:
                 # modification time is Unix epoch
-                time_str = format_date_and_time_compact(
-                    time.localtime(int(data["modified_epoch"])),
-                    without_seconds=True,
-                    optimize_year=True,
-                )
+                time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(data["modified"])))
             except Exception:
-                logger.exception("Could not format modified (%r)", data.get("modified_epoch"))
                 time_str = ""
         else:
             time_str = ""
 
-        self.tree.set(node_id, "modified_fmt", time_str)
-        self.tree.set(node_id, "modified_epoch", data.get("modified_epoch", ""))
+        self.tree.set(node_id, "modified", time_str)
 
         if data["isdir"]:
             self.tree.set(node_id, "kind", "dir")
-            self.tree.set(node_id, "size_fmt", "")
-            self.tree.set(node_id, "size_bytes", "")
+            self.tree.set(node_id, "size", "")
 
             # Ensure that expand button is visible
             # unless we know it doesn't have children
@@ -629,8 +546,7 @@ class BaseFileBrowser(ttk.Frame):
                 img = self.folder_icon
         else:
             self.tree.set(node_id, "kind", "file")
-            self.tree.set(node_id, "size_bytes", data["size_bytes"])
-            self.tree.set(node_id, "size_fmt", sizeof_fmt(data["size_bytes"]))
+            self.tree.set(node_id, "size", data["size"])
 
             # Make sure it doesn't have children
             self.tree.set_children(node_id)
@@ -639,7 +555,6 @@ class BaseFileBrowser(ttk.Frame):
                 path.lower().endswith(".py")
                 or path.lower().endswith(".pyw")
                 or path.lower().endswith(".pyi")
-                or path.lower().endswith(".pyde")
             ):
                 img = self.python_file_icon
             elif self.should_open_name_in_thonny(name):
@@ -848,8 +763,8 @@ class BaseFileBrowser(ttk.Frame):
             title = tr("Directory properties")
         else:
             title = tr("File properties")
-            size_fmt_str = values["size_fmt"]
-            bytes_str = str(values["size_bytes"]) + " " + tr("bytes")
+            size_fmt_str = sizeof_fmt(int(values["size"]))
+            bytes_str = str(values["size"]) + " " + tr("bytes")
 
             text += (
                 tr("Size")
@@ -862,8 +777,8 @@ class BaseFileBrowser(ttk.Frame):
                 + "\n\n"
             )
 
-        if values["modified_fmt"].strip():
-            text += tr("Modified") + ":\n    " + values["modified_fmt"] + "\n\n"
+        if values["modified"].strip():
+            text += tr("Modified") + ":\n    " + values["modified"] + "\n\n"
 
         messagebox.showinfo(title, text.strip(), master=self)
 
@@ -1038,71 +953,6 @@ class BaseFileBrowser(ttk.Frame):
             target = os.path.dirname(target)
         self.copypaste.paste(target)
 
-    def on_heading_click(self, column_name: str):
-        logger.info("Click on column %r", column_name)
-        if column_name == self.order_by:
-            self.reverse_order = not self.reverse_order
-        else:
-            self.order_by = column_name
-            self.reverse_order = False
-
-        self.refresh_tree()
-        self._update_heading_labels()
-
-    def item_matches_filter(self, name: str, atts: Dict[str, Any]) -> bool:
-        if self.filter is None:
-            return True
-
-        if atts.get("isdir", False):
-            return True
-
-        for suffix in self.filter:
-            if name.lower().endswith(suffix.lower()):
-                return True
-
-        return False
-
-    def _update_heading_labels(self):
-        column_specs = {
-            "name": ("#0", tr("Name")),
-            "modified": ("modified_fmt", tr("Modified")),
-            "size": ("size_fmt", tr("Size")),
-        }
-
-        for name, (tree_col_name, plain_label) in column_specs.items():
-            if name == self.order_by:
-                if self.reverse_order:
-                    full_label = f"{plain_label} ⌄"
-                else:
-                    full_label = f"{plain_label} ∧"
-            else:
-                full_label = plain_label
-
-            self.tree.heading(tree_col_name, text=full_label)
-
-    def get_path_bar_background(self) -> str:
-        return lookup_style_option("ViewToolbar.TFrame", "background")
-
-    def get_url_foreground(self) -> str:
-        return lookup_style_option("Url.TLabel", "foreground")
-
-    def get_label_foreground(self) -> str:
-        return lookup_style_option("TLabel", "foreground")
-
-    def on_theme_changed(self, event):
-        self.path_bar.configure(background=self.get_path_bar_background())
-        self.path_bar.tag_configure("dir", foreground=self.get_url_foreground())
-
-    def destroy(self):
-        self.unbind("<<ThemeChanged>>", self._on_theme_changed_binding)
-        super().destroy()
-
-    def is_project_dir(self, path: str) -> bool:
-        return False
-
-    def is_venv_dir(self, path: str) -> bool:
-        return False
-
 
 class CopyPaste(object):
     def __init__(self, filebrowser):
@@ -1185,16 +1035,8 @@ class CopyPaste(object):
 
 
 class BaseLocalFileBrowser(BaseFileBrowser):
-    def __init__(
-        self, master, show_expand_buttons=True, order_by: str = "name", reverse_order: bool = False
-    ):
-        self.dir_separator = os.sep
-        super().__init__(
-            master,
-            show_expand_buttons=show_expand_buttons,
-            order_by=order_by,
-            reverse_order=reverse_order,
-        )
+    def __init__(self, master, show_expand_buttons=True):
+        super().__init__(master, show_expand_buttons=show_expand_buttons)
         get_workbench().bind("WindowFocusIn", self.on_window_focus_in, True)
         get_workbench().bind("LocalFileOperation", self.on_local_file_operation, True)
         self.copypaste = CopyPaste(self)
@@ -1303,23 +1145,10 @@ class BaseLocalFileBrowser(BaseFileBrowser):
 
         os.rename(old_name, full_path)
 
-    def is_project_dir(self, path: str) -> bool:
-        return is_local_project_dir(path)
-
-    def is_venv_dir(self, path: str) -> bool:
-        return is_local_venv_dir(path)
-
 
 class BaseRemoteFileBrowser(BaseFileBrowser):
-    def __init__(
-        self, master, show_expand_buttons=True, order_by: str = "name", reverse_order: bool = False
-    ):
-        super().__init__(
-            master,
-            show_expand_buttons=show_expand_buttons,
-            order_by=order_by,
-            reverse_order=reverse_order,
-        )
+    def __init__(self, master, show_expand_buttons=True):
+        super().__init__(master, show_expand_buttons=show_expand_buttons)
         self.dir_separator = "/"
 
         get_workbench().bind("get_dirs_children_info_response", self.update_dir_data, True)
@@ -1440,9 +1269,7 @@ class BaseRemoteFileBrowser(BaseFileBrowser):
         return get_runner().get_backend_proxy().supports_trash()
 
     def request_focus_into(self, path):
-        logger.info("request_focus_into %r", path)
         if not get_runner().ready_for_remote_file_operations(show_message=True):
-            logger.info("Remote not ready for file operations")
             return False
 
         # super().request_focus_into(path)
@@ -1473,139 +1300,96 @@ class BaseRemoteFileBrowser(BaseFileBrowser):
         raise NotImplementedError()
 
 
-class FileDialog(CommonDialog, ABC):
-    def __init__(
-        self,
-        master,
-        browser_class,
-        kind,
-        initial_dir,
-        filetypes: Optional[List[Tuple[str, str]]] = None,
-        typevariable: Optional[tk.Variable] = None,
-    ):
+class DialogRemoteFileBrowser(BaseRemoteFileBrowser):
+    def __init__(self, master, dialog):
+        super().__init__(master, show_expand_buttons=False)
+
+        self.dialog = dialog
+        self.tree["show"] = ("tree", "headings")
+        self.tree.configure(displaycolumns=(5,))
+        self.tree.configure(height=10)
+
+    def open_file(self, path):
+        self.dialog.double_click_file(path)
+
+    def should_open_name_in_thonny(self, name):
+        # In dialog, all file types are to be opened in Thonny
+        return True
+
+
+class BackendFileDialog(CommonDialog):
+    def __init__(self, master, kind, initial_dir):
         super().__init__(master=master)
         self.result = None
-
-        if filetypes is None:
-            filetypes = [(tr("all files"), "*")]
-        self._extensions_by_desc = {desc: ext.split() for (desc, ext) in filetypes}
-        self._typevariable = typevariable
 
         self.updating_selection = False
 
         self.kind = kind
-        self.title(self.get_title())
+        if kind == "open":
+            self.title(tr("Open from %s") % get_runner().get_node_label())
+        else:
+            assert kind == "save"
+            self.title(tr("Save to %s") % get_runner().get_node_label())
 
         background = ttk.Frame(self)
         background.grid(row=0, column=0, sticky="nsew")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
-        if self.get_favorites():
-            fav_panel = ttk.Frame(background)
-            fav_panel.grid(
-                row=0,
-                column=0,
-                sticky="nwe",
-                pady=self.get_large_padding(),
-                padx=(self.get_large_padding(), 0),
-            )
-            self._add_favorites(fav_panel)
-
-        bordercolor = lookup_style_option("CustomNotebook", "bordercolor")
-
-        self.border = tk.Frame(background, background=bordercolor)
-        self.border.columnconfigure(0, weight=1)
-        self.border.rowconfigure(0, weight=1)
-        self.border.grid(
+        self.browser = DialogRemoteFileBrowser(background, self)
+        self.browser.grid(
             row=0,
-            column=1,
-            sticky="nsew",
+            column=0,
             columnspan=4,
+            sticky="nsew",
             pady=self.get_large_padding(),
             padx=self.get_large_padding(),
         )
-
-        self.browser = browser_class(
-            master=self.border,
-            show_expand_buttons=False,
-            order_by=get_workbench().get_option(FILE_DIALOG_ORDER_BY_OPTION),
-            reverse_order=get_workbench().get_option(FILE_DIALOG_REVERSE_ORDER_OPTION),
-        )
-        self.browser.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.browser.configure(borderwidth=1, relief="groove")
         self.browser.tree.configure(selectmode="browse")
-        self.browser.tree["show"] = ("tree", "headings")
-        self.browser.tree.configure(
-            displaycolumns=(
-                5,
-                4,
-            )
-        )
-        self.browser.tree.configure(height=10)
-        self.browser.open_file = self.double_click_file
-        self.browser.should_open_name_in_thonny = lambda name: True
 
         self.name_label = ttk.Label(background, text=tr("File name:"))
         self.name_label.grid(
             row=1,
-            column=1,
-            pady=(0, self.get_small_padding()),
-            padx=(self.get_large_padding(), self.get_small_padding()),
+            column=0,
+            pady=(0, self.get_large_padding()),
+            padx=self.get_large_padding(),
             sticky="w",
         )
 
         self.name_var = create_string_var("")
-        self.name_entry = ttk.Entry(background, textvariable=self.name_var, state="normal")
+        self.name_entry = ttk.Entry(
+            background, textvariable=self.name_var, state="normal" if kind == "save" else "disabled"
+        )
         self.name_entry.grid(
             row=1,
-            column=2,
-            pady=(0, self.get_small_padding()),
-            padx=(0, self.get_small_padding()),
+            column=1,
+            pady=(0, self.get_large_padding()),
+            padx=(0, self.get_large_padding()),
             sticky="we",
         )
         self.name_entry.bind("<KeyRelease>", self.on_name_edit, True)
 
-        types_mapping = {f"{desc} ({pattern})": desc for (desc, pattern) in filetypes}
-
-        self.filter_combo = MappingCombobox(master=background, mapping=types_mapping, width=20)
-
-        self.filter_combo.grid(
-            row=1,
-            column=3,
-            columnspan=2,
-            pady=(0, self.get_small_padding()),
-            padx=(0, self.get_large_padding()),
-            sticky="we",
-        )
-        self.filter_combo.select_first_value()
-        self.filter_changed()
-        self.filter_combo.bind("<<ComboboxSelected>>", self.filter_changed, True)
-
-        button_panel = ttk.Frame(background)
-        button_panel.grid(row=2, column=1, columnspan=4, sticky="nse")
-
-        self.ok_button = ttk.Button(
-            button_panel, text=tr("OK"), command=self.on_ok, default="active", width=5
-        )
+        self.ok_button = ttk.Button(background, text=tr("OK"), command=self.on_ok)
         self.ok_button.grid(
             row=1,
-            column=1,
+            column=2,
             pady=(0, self.get_large_padding()),
-            padx=(0, self.get_medium_padding()),
+            padx=(0, self.get_large_padding()),
             sticky="e",
         )
 
-        self.cancel_button = ttk.Button(button_panel, text=tr("Cancel"), command=self.on_cancel)
+        self.cancel_button = ttk.Button(background, text=tr("Cancel"), command=self.on_cancel)
         self.cancel_button.grid(
             row=1,
-            column=2,
+            column=3,
             pady=(0, self.get_large_padding()),
             padx=(0, self.get_large_padding()),
             sticky="e",
         )
 
         background.rowconfigure(0, weight=1)
-        background.columnconfigure(2, weight=1)
+        background.columnconfigure(1, weight=1)
 
         self.bind("<Escape>", self.on_cancel, True)
         self.bind("<Return>", self.on_ok, True)
@@ -1619,58 +1403,15 @@ class FileDialog(CommonDialog, ABC):
 
         self.name_entry.focus_set()
 
-    def get_title(self):
-        if self.kind == "open":
-            return tr("Open")
-        elif self.kind == "save":
-            return tr("Save")
-        elif self.kind == "dir":
-            return tr("Select folder")
-        else:
-            raise ValueError("Unexpected kind " + self.kind)
-
-    def get_favorites(self) -> List[str]:
-        return get_os_level_favorite_folders()
-
-    def _add_favorites(self, parent: ttk.Frame):
-
-        for i, path in enumerate(self.get_favorites()):
-            name = os.path.basename(path)
-
-            def open_favorite(event=None, path=path):
-                logger.info("Opening favorite %r", path)
-                self.browser.request_focus_into(path)
-
-            label = create_action_label(parent, name, open_favorite)
-            label.grid(sticky="w", pady=(0, ems_to_pixels(0.5)))
-
     def on_ok(self, event=None):
-        self.save_settings()
         tree = self.browser.tree
-        name = self.name_var.get().strip()
+        name = self.name_var.get()
 
         if not name:
             messagebox.showerror(tr("Error"), tr("You need to select a file!"), master=self)
             return
 
-        if self.kind == "save":
-            # Mimicking a Windows trick
-            # https://www.winhelponline.com/blog/double-extensions-files-save-as-dialog-programs-avoid/
-            if name.endswith('"') and name.startswith('"'):
-                name = name[1:-1]
-            else:
-                proposed_extensions = self._extensions_by_desc[
-                    self.filter_combo.get_selected_value()
-                ]
-                for ext in proposed_extensions:
-                    if name.endswith(ext) or ext in [".*", "*"]:
-                        break
-                else:
-                    name += proposed_extensions[0]
-
-        # In the back-end case I can't ask local OS whether the file exists
-        # Need to consult the tree instead
-        for node_id in tree.get_children(""):  # NB! only works without expanders
+        for node_id in tree.get_children(""):
             if name and name == tree.set(node_id, "name"):
                 break
         else:
@@ -1678,28 +1419,24 @@ class FileDialog(CommonDialog, ABC):
 
         if node_id is not None:
             node_kind = tree.set(node_id, "kind")
-            if self.kind in ["open", "save"] and node_kind != "file":
+            if node_kind != "file":
                 messagebox.showerror(tr("Error"), tr("You need to select a file!"), master=self)
                 return
-            if self.kind == "save":
+            elif self.kind == "save":
                 if not messagebox.askyesno(
                     tr("Overwrite?"), tr("Do you want to overwrite '%s' ?") % name, master=self
                 ):
                     return
 
         parent_path = tree.set("", "path")
-        if parent_path == "" or parent_path.endswith(self.browser.dir_separator):
+        if parent_path == "" or parent_path.endswith("/"):
             self.result = parent_path + name
         else:
-            self.result = parent_path + self.browser.dir_separator + name
-
-        if self._typevariable is not None:
-            self._typevariable.set(self.filter_combo.get_selected_value())
+            self.result = parent_path + "/" + name
 
         self.destroy()
 
     def on_cancel(self, event=None):
-        self.save_settings()
         self.result = None
         self.destroy()
 
@@ -1736,66 +1473,6 @@ class FileDialog(CommonDialog, ABC):
     def set_initial_focus(self, node=None) -> bool:
         self.name_entry.focus_set()
         return True
-
-    def filter_changed(self, event=None):
-        filter_desc = self.filter_combo.get_selected_value()
-        filter = self._extensions_by_desc[filter_desc]
-        if filter == [".*"]:
-            filter = None
-
-        self.browser.filter = filter
-        self.browser.refresh_tree()
-
-    def save_settings(self):
-        get_workbench().set_option(FILE_DIALOG_ORDER_BY_OPTION, self.browser.order_by)
-        get_workbench().set_option(FILE_DIALOG_REVERSE_ORDER_OPTION, self.browser.reverse_order)
-        get_workbench().set_option(
-            FILE_DIALOG_WIDTH_EMS_OPTION, round(pixels_to_ems(self.winfo_width()))
-        )
-        get_workbench().set_option(
-            FILE_DIALOG_HEIGHT_EMS_OPTION, round(pixels_to_ems(self.winfo_height()))
-        )
-
-
-class BackendFileDialog(FileDialog):
-    def __init__(
-        self,
-        master,
-        kind,
-        initial_dir,
-        filetypes: Optional[List[Tuple[str, str]]] = None,
-        typevariable: Optional[tk.Variable] = None,
-    ):
-        super().__init__(
-            master=master,
-            browser_class=BaseRemoteFileBrowser,
-            kind=kind,
-            initial_dir=initial_dir,
-            filetypes=filetypes,
-            typevariable=typevariable,
-        )
-
-    def get_favorites(self) -> List[str]:
-        return []
-
-
-class LocalFileDialog(FileDialog):
-    def __init__(
-        self,
-        master,
-        kind,
-        initial_dir,
-        filetypes: Optional[List[Tuple[str, str]]] = None,
-        typevariable: Optional[tk.Variable] = None,
-    ):
-        super().__init__(
-            master=master,
-            browser_class=BaseLocalFileBrowser,
-            kind=kind,
-            initial_dir=initial_dir,
-            filetypes=filetypes,
-            typevariable=typevariable,
-        )
 
 
 class NodeChoiceDialog(CommonDialog):
@@ -1866,20 +1543,15 @@ class NodeChoiceDialog(CommonDialog):
         self.destroy()
 
 
-def ask_backend_path(master, dialog_kind, filetypes):
+def ask_backend_path(master, dialog_kind):
     proxy = get_runner().get_backend_proxy()
     if not proxy:
         return None
 
     assert proxy.supports_remote_files()
 
-    dlg = BackendFileDialog(master, dialog_kind, proxy.get_cwd(), filetypes=filetypes)
-    show_dialog(
-        dlg,
-        master,
-        width=ems_to_pixels(get_workbench().get_option(FILE_DIALOG_WIDTH_EMS_OPTION)),
-        height=ems_to_pixels(get_workbench().get_option(FILE_DIALOG_HEIGHT_EMS_OPTION)),
-    )
+    dlg = BackendFileDialog(master, dialog_kind, proxy.get_cwd())
+    show_dialog(dlg, master)
     return dlg.result
 
 

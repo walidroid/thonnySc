@@ -12,16 +12,13 @@ from typing import Any, Dict, Optional, Tuple
 from thonny import get_runner, get_workbench, ui_utils
 from thonny.common import normpath_with_actual_case
 from thonny.misc_utils import get_menu_char, running_on_windows
+from thonny.plugins.micropython import BareMetalMicroPythonProxy, list_serial_ports
 from thonny.plugins.micropython.base_flashing_dialog import (
     BaseFlashingDialog,
     TargetInfo,
     family_code_to_name,
 )
-from thonny.plugins.micropython.mp_front import (
-    get_serial_port_label,
-    list_serial_ports,
-    BareMetalMicroPythonProxy,
-)
+from thonny.plugins.micropython.mp_front import get_serial_port_label
 from thonny.running import get_front_interpreter_for_subprocess
 from thonny.ui_utils import EnhancedBooleanVar, MappingCombobox
 
@@ -61,9 +58,6 @@ class ESPFlashingDialog(BaseFlashingDialog):
         ]
         if self.firmware_name == "MicroPython":
             codes.insert(0, "esp8266")
-        if self.firmware_name == "CircuitPython":
-            codes.append("esp32c6")
-            codes.append("esp32h2")
 
         return {family_code_to_name(code): code for code in codes}
 
@@ -601,19 +595,9 @@ class ESPFlashingDialog(BaseFlashingDialog):
 
 
 def try_launch_esptool_dialog(master, firmware_name: str):
-    import subprocess
-
-    interpreter = get_front_interpreter_for_subprocess()
     try:
-        result = subprocess.run(
-            [interpreter, "-c", "import esptool"],
-            capture_output=True, timeout=10
-        )
-        esptool_available = result.returncode == 0
-    except Exception:
-        esptool_available = False
-
-    if not esptool_available:
+        import esptool
+    except ImportError:
         messagebox.showerror(
             "Can't find esptool",
             "esptool not found.\n" + "Install it via 'Tools => Manage plug-ins'",

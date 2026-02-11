@@ -1,71 +1,28 @@
 import logging
 import os.path
-import re
 import sys
 import time
 from logging import getLogger
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, List, Optional, cast
 
-SUPPORTED_VERSIONS = ["3.9", "3.10", "3.11", "3.12", "3.13"]
+from thonny.common import is_private_python, is_virtual_executable
 
-if TYPE_CHECKING:
-    # Following imports are required for MyPy
-    # http://mypy.readthedocs.io/en/stable/common_issues.html#import-cycles
-    from thonny.running import Runner
-    from thonny.shell import ShellView
-    from thonny.workbench import Workbench
-
-
-def get_vendored_libs_dir() -> str:
-    return os.path.normpath(os.path.join(os.path.dirname(__file__), "vendored_libs"))
-
-
-# Required both for front- and back-end
-sys.path.insert(
-    1,
-    get_vendored_libs_dir(),
-)
-
-
-SINGLE_INSTANCE_DEFAULT = True
-BACKEND_LOG_MARKER = "Thonny's backend.log"
-REPORT_TIME = False
-
-
-logger = getLogger(__name__)
-
-# lazily assigned cache variables
-_thonny_user_dir = None
-_configuration_file = None
-_in_debug_mode = None
-_version = None
-_ipc_file = None
-
-
-# variables assigned elsewhere
-_workbench = None
-_runner = None
-
-
-# For timing
 _last_module_count = 0
 _last_modules = set()
+
 _last_time = time.time()
 
 
-def remove_weird_characters(input_string: str) -> str:
-    cleaned_string = re.sub(r"[^a-z]", "", input_string)
-    return cleaned_string
+logger = getLogger(__name__)
 
 
 def report_time(label: str) -> None:
     """
     Method for finding unwarranted imports and delays.
     """
-    global _last_time, _last_module_count, _last_modules
+    # return
 
-    if not REPORT_TIME:
-        return
+    global _last_time, _last_module_count, _last_modules
 
     log_modules = True
 
@@ -87,84 +44,78 @@ def report_time(label: str) -> None:
     _last_module_count = mod_count
 
 
-def get_version():
-    global _version
-    if _version:
-        return _version
-    try:
-        thonny_file = sys.modules["thonny"].__file__
-        assert thonny_file is not None
-        package_dir = os.path.dirname(thonny_file)
-        with open(os.path.join(package_dir, "VERSION"), encoding="ASCII") as fp:
-            _version = fp.read().strip()
-            return _version
-    except Exception:
-        logger.warning("Could not determine Thonny version", exc_info=True)
-        return "0.0.0"
+report_time("After defining report_time")
 
 
-def get_workbench() -> "Workbench":
-    return cast("Workbench", _workbench)
+SINGLE_INSTANCE_DEFAULT = True
+BACKEND_LOG_MARKER = "Thonny's backend.log"
 
 
-def get_runner() -> "Runner":
-    return cast("Runner", _runner)
+def _get_known_folder(ID):
+    # http://stackoverflow.com/a/3859336/261181
+    # http://www.installmate.com/support/im9/using/symbols/functions/csidls.htm
+    import ctypes.wintypes
+
+    SHGFP_TYPE_CURRENT = 0
+    buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+    ctypes.windll.shell32.SHGetFolderPathW(0, ID, 0, SHGFP_TYPE_CURRENT, buf)
+    assert buf.value
+    return buf.value
 
 
-def get_shell(create: bool = True) -> "ShellView":
-    return cast("ShellView", get_workbench().get_view("ShellView", create=create))
+def _get_roaming_appdata_dir():
+    return _get_known_folder(26)
 
 
-def get_ipc_file_path():
-    global _ipc_file
-    if _ipc_file:
-        return _ipc_file
+def _get_local_appdata_dir():
+    return _get_known_folder(28)
 
-    if sys.platform == "win32":
-        from thonny.misc_utils import get_local_appdata_dir
 
-        base_dir = get_local_appdata_dir()
+def _compute_thonny_user_dir():
+    if os.environ.get("THONNY_USER_DIR", ""):
+        return os.path.expanduser(os.environ["THONNY_USER_DIR"])
+    elif is_portable():
+        if sys.platform == "win32":
+            root_dir = os.path.dirname(sys.executable)
+        elif sys.platform == "darwin":
+            root_dir = os.path.join(
+                os.path.dirname(sys.executable), "..", "..", "..", "..", "..", ".."
+            )
+        else:
+            root_dir = os.path.join(os.path.dirname(sys.executable), "..")
+        return os.path.normpath(os.path.abspath(os.path.join(root_dir, "user_data")))
+    elif is_virtual_executable(sys.executable) and not is_private_python(sys.executable):
+        return os.path.join(sys.prefix, ".thonny")
+    elif sys.platform == "win32":
+        return os.path.join(_get_roaming_appdata_dir(), "Thonny")
+    elif sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Thonny")
     else:
-        base_dir = os.environ.get("XDG_RUNTIME_DIR")
-        if not base_dir or not os.path.exists(base_dir):
-            base_dir = os.environ.get("TMPDIR")
-
-    if not base_dir or not os.path.exists(base_dir):
-        base_dir = get_thonny_user_dir()
-
-    import getpass
-
-    username = getpass.getuser()
-    username = remove_weird_characters(username.lower())
-
-    ipc_dir = os.path.join(base_dir, "thonny-%s" % username)
-    os.makedirs(ipc_dir, exist_ok=True)
-
-    if not sys.platform == "win32":
-        os.chmod(ipc_dir, 0o700)
-
-    _ipc_file = os.path.join(ipc_dir, get_profile() + "-ipc.sock")
-    return _ipc_file
+        # https://specifications.freedesktop.org/basedir-spec/latest/ar01s02.html
+        data_home = os.environ.get(
+            "XDG_CONFIG_HOME", os.path.expanduser(os.path.join("~", ".config"))
+        )
+        return os.path.join(data_home, "Thonny")
 
 
-def in_debug_mode() -> bool:
-    global _in_debug_mode
-    if _in_debug_mode is None:
-        _in_debug_mode = (
-            os.environ.get("THONNY_DEBUG", False)
-            in [
-                "1",
-                1,
-                "True",
-                True,
-                "true",
-            ]
-        ) or _read_configured_debug_mode()
+def _read_configured_debug_mode():
+    if not os.path.exists(CONFIGURATION_FILE):
+        return False
 
-    return _in_debug_mode
+    try:
+        with open(CONFIGURATION_FILE, encoding="utf-8") as fp:
+            for line in fp:
+                if "debug_mode" in line and "True" in line:
+                    return True
+        return False
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+        return False
 
 
-def is_portable() -> bool:
+def is_portable():
     # it can be explicitly declared as portable or shared ...
     portable_marker_path = os.path.join(os.path.dirname(sys.executable), "portable_thonny.ini")
     shared_marker_path = os.path.join(os.path.dirname(sys.executable), "shared_thonny.ini")
@@ -192,24 +143,165 @@ def is_portable() -> bool:
         return abs_location.startswith("/media/") or abs_location.startswith("/mnt/")
 
 
-def get_thonny_user_dir() -> str:
-    global _thonny_user_dir
-    if _thonny_user_dir is None:
-        _thonny_user_dir = _compute_thonny_user_dir()
-    return _thonny_user_dir
+_THONNY_VERSION = None
 
 
-def get_configuration_file() -> str:
-    global _configuration_file
-    if _configuration_file is None:
-        _configuration_file = os.path.join(get_thonny_user_dir(), "configuration.ini")
+def get_version():
+    global _THONNY_VERSION
+    if _THONNY_VERSION:
+        return _THONNY_VERSION
+    try:
+        package_dir = os.path.dirname(sys.modules["thonny"].__file__)
+        with open(os.path.join(package_dir, "VERSION"), encoding="ASCII") as fp:
+            _THONNY_VERSION = fp.read().strip()
+            return _THONNY_VERSION
+    except Exception:
+        return "0.0.0"
 
-    return _configuration_file
+
+THONNY_USER_DIR = _compute_thonny_user_dir()
+CONFIGURATION_FILE = os.path.join(THONNY_USER_DIR, "configuration.ini")
+_CONFIGURED_DEBUG = _read_configured_debug_mode()
+
+
+_IPC_FILE = None
+
+
+def get_ipc_file_path():
+    global _IPC_FILE
+    if _IPC_FILE:
+        return _IPC_FILE
+
+    if sys.platform == "win32":
+        base_dir = _get_local_appdata_dir()
+    else:
+        base_dir = os.environ.get("XDG_RUNTIME_DIR")
+        if not base_dir or not os.path.exists(base_dir):
+            base_dir = os.environ.get("TMPDIR")
+
+    if not base_dir or not os.path.exists(base_dir):
+        base_dir = THONNY_USER_DIR
+
+    for name in ("LOGNAME", "USER", "LNAME", "USERNAME"):
+        if name in os.environ:
+            username = os.environ.get(name)
+            break
+    else:
+        username = os.path.basename(os.path.expanduser("~"))
+
+    ipc_dir = os.path.join(base_dir, "thonny-%s" % username)
+    os.makedirs(ipc_dir, exist_ok=True)
+
+    if not sys.platform == "win32":
+        os.chmod(ipc_dir, 0o700)
+
+    _IPC_FILE = os.path.join(ipc_dir, "ipc.sock")
+    return _IPC_FILE
+
+
+def _check_welcome():
+    from thonny import misc_utils
+
+    if not os.path.exists(CONFIGURATION_FILE) and not misc_utils.running_on_rpi():
+        from thonny.config import ConfigurationManager
+        from thonny.first_run import FirstRunWindow
+
+        mgr = ConfigurationManager(CONFIGURATION_FILE)
+
+        win = FirstRunWindow(mgr)
+        win.mainloop()
+
+        if win.ok and sys.platform == "darwin":
+            macos_app_path = _get_macos_app_path()
+            if macos_app_path:
+                # Shouldn't proceed to the main window in the same process, as TkAqua will crash on opening a menu
+                # or saving a file (https://github.com/thonny/thonny/issues/2860).
+                # Let's restart.
+                print("Restarting", macos_app_path)
+                os.system(f"open -n '{macos_app_path}'")
+                sys.exit(0)
+
+        return win.ok
+    else:
+        return True
+
+
+def _get_macos_app_path() -> Optional[str]:
+    if sys.platform != "darwin":
+        return None
+    orig_argv = _get_orig_argv()
+    if not orig_argv:
+        return None
+
+    if orig_argv[0].endswith("Thonny.app/Contents/MacOS/thonny"):
+        return orig_argv[0][: -len("/Contents/MacOS/thonny")]
+
+    return None
+
+
+def launch():
+    import runpy
+
+    if sys.executable.endswith("thonny.exe"):
+        # otherwise some library may try to run its subprocess with thonny.exe
+        # NB! Must be pythonw.exe not python.exe, otherwise Runner thinks console
+        # is already allocated.
+        sys.executable = sys.executable[: -len("thonny.exe")] + "pythonw.exe"
+
+    set_dpi_aware()
+
+    try:
+        runpy.run_module("thonny.customize", run_name="__main__")
+    except ImportError:
+        pass
+
+    prepare_thonny_user_dir()
+    _configure_frontend_logging()
+
+    if not _check_welcome():
+        return 0
+
+    if _should_delegate():
+        try:
+            _delegate_to_existing_instance(sys.argv[1:])
+            print("Delegated to an existing Thonny instance. Exiting now.")
+            return 0
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+
+    # Did not or could not delegate
+
+    try:
+        from thonny import workbench
+
+        bench = workbench.Workbench()
+        bench.mainloop()
+        return 0
+
+    except Exception:
+        import tkinter as tk
+        import traceback
+        from logging import exception
+
+        exception("Internal launch or mainloop error")
+        from thonny import ui_utils
+
+        dlg = ui_utils.LongTextDialog("Internal error", traceback.format_exc())
+        ui_utils.show_dialog(dlg, tk._default_root)
+        return -1
+    finally:
+        runner = get_runner()
+        if runner is not None:
+            runner.destroy_backend()
+
+    return 0
 
 
 def prepare_thonny_user_dir():
-    if not os.path.exists(get_thonny_user_dir()):
-        os.makedirs(get_thonny_user_dir(), mode=0o700, exist_ok=True)
+    if not os.path.exists(THONNY_USER_DIR):
+        os.makedirs(THONNY_USER_DIR, mode=0o700, exist_ok=True)
 
         # user_dir_template is a post-installation means for providing
         # alternative default user environment in multi-user setups
@@ -230,73 +322,144 @@ def prepare_thonny_user_dir():
                         shutil.copyfile(src_item, dest_item)
                         os.chmod(dest_item, 0o600)
 
-            copy_contents(template_dir, get_thonny_user_dir())
+            copy_contents(template_dir, THONNY_USER_DIR)
 
 
-def set_logging_level(level=None):
-    if level is None:
-        level = choose_logging_level()
+def _should_delegate():
+    if not os.path.exists(get_ipc_file_path()):
+        # no previous instance
+        return False
 
-    logging.getLogger("thonny").setLevel(level)
+    from thonny.config import try_load_configuration
+
+    configuration_manager = try_load_configuration(CONFIGURATION_FILE)
+    configuration_manager.set_default("general.single_instance", SINGLE_INSTANCE_DEFAULT)
+    return configuration_manager.get_option("general.single_instance")
 
 
-def choose_logging_level():
-    if in_debug_mode():
-        return logging.DEBUG
+def _delegate_to_existing_instance(args):
+    import socket
+
+    from thonny import workbench
+
+    transformed_args = []
+    for arg in args:
+        if not arg.startswith("-"):
+            arg = os.path.abspath(arg)
+
+        transformed_args.append(arg)
+
+    try:
+        sock, secret = _create_client_socket()
+    except Exception:
+        # Maybe the lock is abandoned or the content is corrupted
+        try:
+            os.remove(get_ipc_file_path())
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        raise
+
+    data = repr((secret, transformed_args)).encode(encoding="utf_8")
+
+    sock.settimeout(2.0)
+    sock.sendall(data)
+    sock.shutdown(socket.SHUT_WR)
+    response = bytes([])
+    while len(response) < len(workbench.SERVER_SUCCESS):
+        new_data = sock.recv(2)
+        if len(new_data) == 0:
+            break
+        else:
+            response += new_data
+
+    if response.decode("UTF-8") != workbench.SERVER_SUCCESS:
+        raise RuntimeError("Unsuccessful delegation")
+
+
+def _create_client_socket():
+    import socket
+
+    timeout = 2.0
+
+    if sys.platform == "win32":
+        with open(get_ipc_file_path(), "r") as fp:
+            port = int(fp.readline().strip())
+            secret = fp.readline().strip()
+
+        # "localhost" can be much slower than "127.0.0.1"
+        client_socket = socket.create_connection(("127.0.0.1", port), timeout=timeout)
     else:
-        return logging.INFO
+        client_socket = socket.socket(socket.AF_UNIX)  # @UndefinedVariable
+        client_socket.settimeout(timeout)
+        client_socket.connect(get_ipc_file_path())
+        secret = ""
+
+    return client_socket, secret
+
+
+def _configure_frontend_logging() -> None:
+    _configure_logging(get_frontend_log_file(), _choose_logging_level())
 
 
 def configure_backend_logging() -> None:
-    configure_logging(get_backend_log_file(), None)
+    _configure_logging(get_backend_log_file(), None)
 
 
 def get_backend_log_file():
-    file_name = "backend.log"
-    if any(var in os.environ for var in ["SSH_CLIENT", "SSH_TTY", "SSH_CONNECTION"]):
-        file_name = "ssh_" + file_name
-
-    return os.path.join(get_thonny_user_dir(), file_name)
+    return os.path.join(THONNY_USER_DIR, "backend.log")
 
 
-def configure_logging(log_file, console_level=None):
+def get_frontend_log_file():
+    return os.path.join(THONNY_USER_DIR, "frontend.log")
+
+
+def _get_orig_argv() -> Optional[List[str]]:
+    try:
+        from sys import orig_argv  # since 3.10
+
+        return sys.orig_argv
+    except ImportError:
+        # https://stackoverflow.com/a/57914236/261181
+        import ctypes
+
+        argc = ctypes.c_int()
+        argv = ctypes.POINTER(ctypes.c_wchar_p if sys.version_info >= (3,) else ctypes.c_char_p)()
+        try:
+            ctypes.pythonapi.Py_GetArgcArgv(ctypes.byref(argc), ctypes.byref(argv))
+        except AttributeError:
+            # See https://github.com/thonny/thonny/issues/2206
+            # and https://bugs.python.org/issue40910
+            # This symbol is not available in thonny.exe built agains Python 3.8
+            return None
+
+        # Ctypes are weird. They can't be used in list comprehensions, you can't use `in` with them, and you can't
+        # use a for-each loop on them. We have to do an old-school for-i loop.
+        arguments = list()
+        for i in range(argc.value):
+            arguments.append(argv[i])
+
+        return arguments
+
+
+def _configure_logging(log_file, console_level=None):
     logFormatter = logging.Formatter(
         "%(asctime)s.%(msecs)03d [%(threadName)s] %(levelname)-7s %(name)s: %(message)s", "%H:%M:%S"
     )
 
-    file_handler = None
-    
-    candidates = [log_file]
-    
-    # Add fallback with PID
-    head, tail = os.path.split(log_file)
-    root, ext = os.path.splitext(tail)
-    candidates.append(os.path.join(head, f"{root}_{os.getpid()}{ext}"))
-    
-    # Add fallback with PID and random number
-    import random
-    candidates.append(os.path.join(head, f"{root}_{os.getpid()}_{random.randint(0, 99999)}{ext}"))
-    
-    for candidate in candidates:
-        try:
-            file_handler = logging.FileHandler(candidate, encoding="UTF-8", mode="w")
-            break # Success!
-        except Exception:
-            pass # Try next candidate
-    
-    if file_handler:
-        file_handler.setFormatter(logFormatter)
+    file_handler = logging.FileHandler(log_file, encoding="UTF-8", mode="w")
+    file_handler.setFormatter(logFormatter)
 
     main_logger = logging.getLogger("thonny")
     contrib_logger = logging.getLogger("thonnycontrib")
-    minny_logger = logging.getLogger("minny")
+    pipkin_logger = logging.getLogger("pipkin")
 
     # NB! Don't mess with the main root logger, because (CPython) backend runs user code
-    for logger in [main_logger, contrib_logger, minny_logger]:
-        logger.setLevel(choose_logging_level())
+    for logger in [main_logger, contrib_logger, pipkin_logger]:
+        logger.setLevel(_choose_logging_level())
         logger.propagate = False  # otherwise it will be also reported by IDE-s root logger
-        if file_handler:
-            logger.addHandler(file_handler)
+        logger.addHandler(file_handler)
 
     if console_level is not None:
         console_handler = logging.StreamHandler(sys.stdout)
@@ -308,41 +471,20 @@ def configure_logging(log_file, console_level=None):
     # Log most important info as soon as possible
     main_logger.info("Thonny version: %s", get_version())
     main_logger.info("cwd: %s", os.getcwd())
-    main_logger.info("original argv: %s", sys.orig_argv)
+    main_logger.info("original argv: %s", _get_orig_argv())
     main_logger.info("sys.executable: %s", sys.executable)
     main_logger.info("sys.argv: %s", sys.argv)
     main_logger.info("sys.path: %s", sys.path)
     main_logger.info("sys.flags: %s", sys.flags)
 
     import faulthandler
-    import signal
 
-    fault_out = None
-    fault_log_path = os.path.join(get_thonny_user_dir(), "frontend_faults.log")
-    
-    candidates = [fault_log_path]
-    head, tail = os.path.split(fault_log_path)
-    root, ext = os.path.splitext(tail)
-    candidates.append(os.path.join(head, f"{root}_{os.getpid()}{ext}"))
-    import random
-    candidates.append(os.path.join(head, f"{root}_{os.getpid()}_{random.randint(0, 99999)}{ext}"))
-
-    for candidate in candidates:
-        try:
-            fault_out = open(candidate, mode="w", buffering=1)
-            break
-        except Exception:
-            pass
-
-    if fault_out:
-        faulthandler.enable(fault_out)
-        if sys.platform != "win32":
-            faulthandler.register(signal.SIGUSR1, file=fault_out, all_threads=True)
-            # for getting traces of hung process, on macOS invoke  "kill -USR1 <pid>" and then "kill -USR2 <pid>"
+    fault_out = open(os.path.join(THONNY_USER_DIR, "frontend_faults.log"), mode="w")
+    faulthandler.enable(fault_out)
 
 
 def get_user_base_directory_for_plugins() -> str:
-    return os.path.join(get_thonny_user_dir(), "plugins")
+    return os.path.join(THONNY_USER_DIR, "plugins")
 
 
 def get_sys_path_directory_containg_plugins() -> str:
@@ -351,68 +493,74 @@ def get_sys_path_directory_containg_plugins() -> str:
     return get_user_site_packages_dir_for_base(get_user_base_directory_for_plugins())
 
 
-def get_profile() -> str:
-    try:
-        idx = sys.argv.index("--profile")
-    except ValueError:
-        return "default"
+def set_dpi_aware():
+    # https://stackoverflow.com/questions/36134072/setprocessdpiaware-seems-not-to-work-under-windows-10
+    # https://bugs.python.org/issue33656
+    # https://msdn.microsoft.com/en-us/library/windows/desktop/dn280512(v=vs.85).aspx
+    # https://github.com/python/cpython/blob/master/Lib/idlelib/pyshell.py
+    if sys.platform == "win32":
+        try:
+            import ctypes
 
-    if len(sys.argv) > idx + 1:
-        return sys.argv[idx + 1]
-
-    return "default"
-
-
-def _compute_thonny_user_dir():
-    env_var = os.environ.get("THONNY_USER_DIR", "")
-    if env_var:
-        # back-end processes always choose this path
-        return os.path.expanduser(env_var)
-
-    return os.path.join(_compute_thonny_profiles_dir(), get_profile())
+            PROCESS_SYSTEM_DPI_AWARE = 1
+            ctypes.OleDLL("shcore").SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE)
+        except (ImportError, AttributeError, OSError):
+            pass
 
 
-def _compute_thonny_profiles_dir():
-    # Following is used only in the front-end process
-    from thonny.common import is_private_python, running_in_virtual_environment
-    from thonny.misc_utils import get_roaming_appdata_dir
+if TYPE_CHECKING:
+    # Following imports are required for MyPy
+    # http://mypy.readthedocs.io/en/stable/common_issues.html#import-cycles
+    import thonny.workbench
+    from thonny.running import Runner
+    from thonny.shell import ShellView
+    from thonny.workbench import Workbench
 
-    if is_portable():
-        if sys.platform == "win32":
-            root_dir = os.path.dirname(sys.executable)
-        elif sys.platform == "darwin":
-            root_dir = os.path.join(
-                os.path.dirname(sys.executable), "..", "..", "..", "..", "..", ".."
-            )
-        else:
-            root_dir = os.path.join(os.path.dirname(sys.executable), "..")
-        return os.path.normpath(os.path.abspath(os.path.join(root_dir, "user_data")))
-    elif running_in_virtual_environment() and not is_private_python(sys.executable):
-        return os.path.join(sys.prefix, ".thonny")
-    elif sys.platform == "win32":
-        return os.path.join(get_roaming_appdata_dir(), "Thonny")
-    elif sys.platform == "darwin":
-        return os.path.expanduser("~/Library/Thonny")
+_workbench = None  # type: Optional[Workbench]
+
+
+def get_workbench() -> "Workbench":
+    return cast("Workbench", _workbench)
+
+
+_runner = None  # type: Optional[Runner]
+
+
+def set_logging_level(level=None):
+    if level is None:
+        level = _choose_logging_level()
+
+    logging.getLogger("thonny").setLevel(level)
+
+
+def _choose_logging_level():
+    if in_debug_mode():
+        return logging.DEBUG
     else:
-        # https://specifications.freedesktop.org/basedir-spec/latest/ar01s02.html
-        data_home = os.environ.get(
-            "XDG_CONFIG_HOME", os.path.expanduser(os.path.join("~", ".config"))
-        )
-        return os.path.join(data_home, "Thonny")
+        return logging.INFO
 
 
-def _read_configured_debug_mode():
-    if not os.path.exists(get_configuration_file()):
-        return False
+def in_debug_mode() -> bool:
+    # Value may be something other than string when it is set in Python code
+    return (
+        os.environ.get("THONNY_DEBUG", False)
+        in [
+            "1",
+            1,
+            "True",
+            True,
+            "true",
+        ]
+        or _CONFIGURED_DEBUG
+    )
 
-    try:
-        with open(get_configuration_file(), encoding="utf-8") as fp:
-            for line in fp:
-                if "debug_mode" in line and "True" in line:
-                    return True
-        return False
-    except Exception:
-        import traceback
 
-        traceback.print_exc()
-        return False
+def get_runner() -> "Runner":
+    return cast("Runner", _runner)
+
+
+def get_shell() -> "ShellView":
+    return cast("ShellView", get_workbench().get_view("ShellView"))
+
+
+report_time("After loading thonny module")

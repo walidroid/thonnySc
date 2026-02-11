@@ -3,28 +3,23 @@
 """
 Classes used both by front-end and back-end
 """
-from __future__ import annotations
-
-import dataclasses
 import os.path
 import site
 import sys
 from collections import namedtuple
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Any, Callable, Dict, Iterable, List, Optional  # @UnusedImport
+from typing import Any, Callable, Dict, List, Optional, Tuple  # @UnusedImport
 
 logger = getLogger(__name__)
 
 STRING_PSEUDO_FILENAME = "<string>"
 REPL_PSEUDO_FILENAME = "<stdin>"
 MESSAGE_MARKER = "\x02"
-OBJECT_LINK_START = "[ide_object_link=%d]"
-OBJECT_LINK_END = "[/ide_object_link]"
+OBJECT_LINK_START = "[object_link_for_thonny=%d]"
+OBJECT_LINK_END = "[/object_link_for_thonny]"
+REMOTE_PATH_MARKER = " :: "
 PROCESS_ACK = "OK"
-ALL_EXPLAINED_STATUS_CODE = 193
-
-NBSP = "\u00a0"
 
 IGNORED_FILES_AND_DIRS = [
     "System Volume Information",
@@ -63,20 +58,10 @@ TextRange = namedtuple("TextRange", ["lineno", "col_offset", "end_lineno", "end_
 
 @dataclass(frozen=True)
 class DistInfo:
-    name: str
-    version: Optional[str]
-    summary: Optional[str] = None
-    license: Optional[str] = None
-    author: Optional[str] = None
-    classifiers: List[str] = dataclasses.field(default_factory=list)
-    home_page: Optional[str] = None
-    package_url: Optional[str] = None
-    project_urls: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
-    requires: List[str] = dataclasses.field(default_factory=list)
-    source: Optional[str] = None
-    installed_location: Optional[str] = None
-    meta_dir_path: Optional[str] = None
-    complete: bool = True
+    key: str
+    project_name: str
+    version: str
+    location: str
 
 
 class Record:
@@ -120,7 +105,7 @@ class Record:
     def __eq__(self, other):
         # pylint: disable=unidiomatic-typecheck
 
-        if type(self) is type(other):
+        if type(self) != type(other):
             return False
 
         if len(self.__dict__) != len(other.__dict__):
@@ -132,7 +117,7 @@ class Record:
             self_value = getattr(self, key)
             other_value = getattr(other, key)
 
-            if type(self_value) is type(other_value) or self_value != other_value:
+            if type(self_value) != type(other_value) or self_value != other_value:
                 return False
 
         return True
@@ -255,7 +240,7 @@ def serialize_message(msg: Record, max_line_length=65536) -> str:
     # default (safe) window size in Paramiko (https://github.com/thonny/thonny/issues/1680)
     msg_str = ascii(msg)
 
-    lines: List[str] = []
+    lines = []
     for i in range(0, len(msg_str), max_line_length):
         lines.append(msg_str[i : i + max_line_length])
 
@@ -265,7 +250,7 @@ def serialize_message(msg: Record, max_line_length=65536) -> str:
 def parse_message(msg_string: str) -> Record:
     # DataFrames may have nan
     # pylint: disable=unused-variable
-    locals()["nan"] = float("nan")
+    nan = float("nan")  # @UnusedVariable
     assert msg_string[0] == MESSAGE_MARKER
     assert msg_string.strip().endswith(")")
     msg_start = msg_string.index(" ")
@@ -284,7 +269,7 @@ def normpath_with_actual_case(name: str) -> str:
             # https://stackoverflow.com/questions/2113822/python-getting-filename-case-as-stored-in-windows/2114975
             norm_name = os.path.normpath(name)
 
-            from ctypes import create_unicode_buffer, windll  # type: ignore
+            from ctypes import create_unicode_buffer, windll
 
             buf = create_unicode_buffer(512)
             # GetLongPathNameW alone doesn't fix filename part
@@ -380,12 +365,31 @@ def get_site_dir(symbolic_name, executable=None):
     else:
         import subprocess
 
-        result = subprocess.check_output(
-            [executable, "-m", "site", "--" + symbolic_name.lower().replace("_", "-")],
-            universal_newlines=True,
-        ).strip()
+        result = (
+            subprocess.check_output(
+                [executable, "-m", "site", "--" + symbolic_name.lower().replace("_", "-")],
+                universal_newlines=True,
+            )
+            .decode()
+            .strip()
+        )
 
     return result if result else None
+
+
+def get_base_executable():
+    if sys.exec_prefix == sys.base_exec_prefix:
+        return sys.executable
+
+    if sys.platform == "win32":
+        guess = sys.base_exec_prefix + "\\" + os.path.basename(sys.executable)
+        if os.path.isfile(guess):
+            return normpath_with_actual_case(guess)
+
+    if os.path.islink(sys.executable):
+        return os.path.realpath(sys.executable)
+
+    raise RuntimeError("Don't know how to locate base executable")
 
 
 def get_augmented_system_path(extra_dirs):
@@ -412,6 +416,45 @@ def update_system_path(env, value):
             env["PATH"] = value
     else:
         env["PATH"] = value
+
+
+@dataclass
+class SignatureParameter:
+    kind: str
+    name: str
+    annotation: Optional[str]
+    default: Optional[str]
+
+
+@dataclass
+class SignatureInfo:
+    name: str
+    params: List[SignatureParameter]
+    return_type: Optional[str]
+    current_param_index: Optional[int] = None
+    call_bracket_start: Optional[Tuple[int, int]] = None
+
+
+@dataclass
+class CompletionInfo:
+    name: str
+    name_with_symbols: str
+    full_name: str
+    type: str
+    prefix_length: int  # the number of chars to be deleted before inserting name
+    signatures: Optional[List[SignatureInfo]]
+    docstring: Optional[str]
+    module_name: Optional[str]
+    module_path: Optional[str]
+
+
+@dataclass
+class NameReference:
+    module_name: str
+    module_path: str
+    row: int
+    column: int
+    length: int
 
 
 class UserError(RuntimeError):
@@ -450,7 +493,7 @@ def get_single_dir_child_data(path: str, include_hidden: bool = False) -> Option
             return get_single_dir_child_data("/", include_hidden)
 
     elif os.path.isdir(path) or os.path.ismount(path):
-        result: Dict[str, Any] = {}
+        result = {}
 
         try:
             for child in os.listdir(path):
@@ -464,15 +507,15 @@ def get_single_dir_child_data(path: str, include_hidden: bool = False) -> Option
                     name = os.path.basename(full_child_path)
                     st = os.stat(full_child_path, dir_fd=None, follow_symlinks=True)
                     result[name] = {
-                        "size_bytes": None if os.path.isdir(full_child_path) else st.st_size,
-                        "modified_epoch": st.st_mtime,
+                        "size": None if os.path.isdir(full_child_path) else st.st_size,
+                        "modified": st.st_mtime,
                         "hidden": hidden,
                     }
         except PermissionError:
             result["<not accessible>"] = {
                 "kind": "error",
-                "size_bytes": -1,
-                "modified_epoch": None,
+                "size": -1,
+                "modified": None,
                 "hidden": None,
             }
 
@@ -485,7 +528,7 @@ def get_windows_volumes_info():
     # http://stackoverflow.com/a/2288225/261181
     # http://msdn.microsoft.com/en-us/library/windows/desktop/aa364939%28v=vs.85%29.aspx
     import string
-    from ctypes import windll  # type: ignore
+    from ctypes import windll
 
     all_drive_types = [
         "DRIVE_UNKNOWN",
@@ -532,8 +575,8 @@ def get_windows_volumes_info():
                     label = volume_name + " (" + drive + ")"
                     result[path] = {
                         "label": label,
-                        "size_bytes": None,
-                        "modified_epoch": max(st.st_mtime, st.st_ctime),
+                        "size": None,
+                        "modified": max(st.st_mtime, st.st_ctime),
                     }
                 except OSError as e:
                     logger.warning("Could not get information for %s", path, exc_info=e)
@@ -547,7 +590,7 @@ def get_windows_volume_name(path):
     # https://stackoverflow.com/a/12056414/261181
     import ctypes
 
-    kernel32 = ctypes.windll.kernel32  # type: ignore
+    kernel32 = ctypes.windll.kernel32
     volume_name_buffer = ctypes.create_unicode_buffer(1024)
     file_system_name_buffer = ctypes.create_unicode_buffer(1024)
     serial_number = None
@@ -577,7 +620,7 @@ def get_windows_network_locations():
     CSIDL_NETHOOD = 0x13
     SHGFP_TYPE_CURRENT = 0
     buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-    ctypes.windll.shell32.SHGetFolderPathW(0, CSIDL_NETHOOD, 0, SHGFP_TYPE_CURRENT, buf)  # type: ignore
+    ctypes.windll.shell32.SHGetFolderPathW(0, CSIDL_NETHOOD, 0, SHGFP_TYPE_CURRENT, buf)
     shortcuts_dir = buf.value
     if not buf.value:
         logger.warning("Could not determine windows shortcuts directory")
@@ -592,8 +635,8 @@ def get_windows_network_locations():
                 target = get_windows_lnk_target(lnk_path)
                 result[target] = {
                     "label": entry.name + " (" + target + ")",
-                    "size_bytes": None,
-                    "modified_epoch": None,
+                    "size": None,
+                    "modified": None,
                 }
             except Exception:
                 logger.error("Can't get target from %s", lnk_path, exc_info=True)
@@ -623,7 +666,7 @@ def execute_system_command(cmd, cwd=None, disconnect_stdin=False):
     # Make sure this python interpreter and its scripts are available
     # in PATH
     update_system_path(env, get_augmented_system_path(get_exe_dirs()))
-    popen_kw: Dict[str, Any] = dict(
+    popen_kw = dict(
         env=env,
         universal_newlines=True,
         bufsize=0,
@@ -635,8 +678,9 @@ def execute_system_command(cmd, cwd=None, disconnect_stdin=False):
     if disconnect_stdin:
         popen_kw["stdin"] = subprocess.DEVNULL
 
-    popen_kw["errors"] = "replace"
-    popen_kw["encoding"] = encoding
+    if sys.version_info >= (3, 6):
+        popen_kw["errors"] = "replace"
+        popen_kw["encoding"] = encoding
 
     if isinstance(cmd.cmd_line, str) and cmd.cmd_line.startswith("!"):
         cmd_line = cmd.cmd_line[1:]
@@ -742,6 +786,13 @@ def read_one_incoming_message_str(line_reader):
     return msg_str
 
 
+def is_virtual_executable(executable):
+    exe_dir = os.path.dirname(executable)
+    return os.path.exists(os.path.join(exe_dir, "activate")) or os.path.exists(
+        os.path.join(exe_dir, "activate.bat")
+    )
+
+
 def is_private_python(executable):
     result = os.path.exists(os.path.join(os.path.dirname(executable), "thonny_python.ini"))
     logger.debug("is_private_python(%r) == %r", executable, result)
@@ -749,139 +800,17 @@ def is_private_python(executable):
 
 
 def running_in_virtual_environment() -> bool:
-    return sys.base_prefix != sys.prefix
-
-
-def export_distributions_info_from_dir(dir_path: str) -> List[DistInfo]:
-    from importlib.metadata import DistributionFinder, MetadataPathFinder
-
-    dists = MetadataPathFinder.find_distributions(
-        context=DistributionFinder.Context(path=[dir_path])
+    return (
+        hasattr(sys, "base_prefix")
+        and sys.base_prefix != sys.prefix
+        or hasattr(sys, "real_prefix")
+        and getattr(sys, "real_prefix") != sys.prefix
     )
-    return export_distributions_info(dists, assume_pypi=False)
 
 
-def export_installed_distributions_info() -> List[DistInfo]:
-    # If it is called after first installation to user site packages
-    # this dir is not yet in sys.path
-    # This would be required also when using Python 3.8 and importlib.metadata.distributions()
-    if (
-        site.ENABLE_USER_SITE
-        and site.getusersitepackages()
-        and os.path.exists(site.getusersitepackages())
-        and site.getusersitepackages() not in sys.path
-    ):
-        # insert before first site packages item
-        for i, item in enumerate(sys.path):
-            if "site-packages" in item or "dist-packages" in item:
-                sys.path.insert(i, site.getusersitepackages())
-                break
-        else:
-            sys.path.append(site.getusersitepackages())
-
-    from importlib.metadata import distributions
-
-    return export_distributions_info(distributions(), assume_pypi=True)
+def is_remote_path(s: str) -> bool:
+    return REMOTE_PATH_MARKER in s
 
 
-def export_distributions_info(dists: Iterable, assume_pypi: bool) -> List[DistInfo]:
-    def get_project_urls(dist):
-        result = {}
-        for key, value in dist.metadata.items():
-            if key == "Project-URL":
-                label, url = value.split(",", maxsplit=1)
-                label = label.strip()
-                url = url.strip()
-                result[label] = url
-        return result
-
-    def get_dist_name(dist):
-        if hasattr(dist, "name"):
-            return dist.name
-        else:
-            # I met this case with Python 3.9
-            return dist.metadata["Name"]
-
-    def infer_package_url(dist):
-        name = get_dist_name(dist)
-
-        if (
-            not assume_pypi
-            and "micropython" not in name.lower()
-            and "circuitpython" not in name.lower()
-        ):
-            # probably a micropython-lib package
-            return None
-
-        pypi_url_name = name.replace("_", "-")
-        # NB! no guarantee that this package exists at PyPI or is related to installed package
-        return f"https://pypi.org/project/{pypi_url_name}/"
-
-    return [
-        DistInfo(
-            name=get_dist_name(dist),
-            version=dist.version,
-            requires=dist.requires or [],
-            summary=dist.metadata["Summary"] or None,
-            author=dist.metadata["Author"] or None,
-            license=dist.metadata["License"] or None,
-            home_page=dist.metadata["Home-page"] or None,
-            project_urls=get_project_urls(dist),
-            package_url=infer_package_url(dist),
-            classifiers=[value for (key, value) in dist.metadata.items() if key == "Classifier"],
-            installed_location=str(dist.locate_file("")),
-        )
-        for dist in dists
-    ]
-
-
-def try_get_base_executable(executable: str) -> Optional[str]:
-    if os.path.islink(executable):
-        # a venv executable may link to another venv executable
-        return try_get_base_executable(os.path.realpath(executable))
-
-    may_be_venv_exe = False
-    for location in ["..", "."]:
-        cfg_path = os.path.join(os.path.dirname(executable), location, "pyvenv.cfg")
-
-        if not os.path.isfile(cfg_path):
-            continue
-
-        may_be_venv_exe = True
-
-        atts = {}
-        with open(cfg_path) as fp:
-            for line in fp:
-                if "=" not in line:
-                    continue
-                key, value = line.split("=", maxsplit=1)
-                atts[key.strip()] = value.strip()
-
-        if "home" not in atts:
-            logger.warning("No home in %s", cfg_path)
-            continue
-
-        if "executable" in atts:
-            # venv-s starting with Python 3.11
-            return atts["executable"]
-
-        if "base-executable" in atts:
-            # virtualenv-s starting with ???
-            return atts["base-executable"]
-
-    # pyvenv.cfg may be present also in non-virtual envs.
-    # I can check for this in certain case
-    if (
-        may_be_venv_exe
-        and os.path.samefile(sys.executable, executable)
-        and sys.prefix == sys.base_prefix
-    ):
-        may_be_venv_exe = False
-
-    if may_be_venv_exe:
-        # should only happen with venv-s before Python 3.11 or with uv
-        # as Python 3.11 started recording executable in pyvenv.cfg
-        logger.warning("Could not find base executable of %s", executable)
-        return None
-    else:
-        return executable
+def is_local_path(s: str) -> bool:
+    return not is_remote_path(s) and not s.startswith("<")

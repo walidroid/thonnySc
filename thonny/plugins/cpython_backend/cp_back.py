@@ -43,7 +43,6 @@ from thonny.common import (
     ValueInfo,
     execute_system_command,
     execute_with_frontend_sys_path,
-    export_installed_distributions_info,
     get_augmented_system_path,
     get_exe_dirs,
     get_python_version_string,
@@ -51,38 +50,12 @@ from thonny.common import (
     path_startswith,
     running_in_virtual_environment,
     serialize_message,
-    try_get_base_executable,
     update_system_path,
 )
 
 _REPL_HELPER_NAME = "_thonny_repl_print"
 
-_CONFIG_FILENAME = os.path.join(thonny.get_thonny_user_dir(), "backend_configuration.ini")
-
-# Error translations for French
-_ERROR_TRANSLATIONS = {
-    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n'est pas définie",
-    r"SyntaxError: invalid syntax": r"SyntaxError : syntaxe invalide",
-    r"IndentationError: unexpected indent": r"IndentationError : indentation inattendue",
-    r"IndentationError: expected an indented block": r"IndentationError : un bloc indenté est attendu",
-    r"TypeError: (.*) takes (.*) positional argument but (.*) were given": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)",
-    r"TypeError: (.*) missing (.*) required positional arguments?: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
-    r"ValueError: (.*)": r"ValueError : \1",
-    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors intervalle",
-    r"KeyError: (.*)": r"KeyError : clé \1 introuvable",
-    r"ZeroDivisionError: division by zero": r"ZeroDivisionError : division par zéro",
-    r"ModuleNotFoundError: No module named '(.*)'": r"ModuleNotFoundError : Aucun module nommé « \1 »",
-    r"AttributeError: '(.*)' object has no attribute '(.*)'": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »",
-    r"FileNotFoundError: \[Errno 2\] No such file or directory: '(.*)'": r"FileNotFoundError : [Errno 2] Aucun fichier ou dossier de ce type : « \1 »",
-}
-
-def _translate_error(text):
-    """Translate error messages to French."""
-    if not text:
-        return text
-    for pattern, replacement in _ERROR_TRANSLATIONS.items():
-        text = re.sub(pattern, replacement, text)
-    return text
+_CONFIG_FILENAME = os.path.join(thonny.THONNY_USER_DIR, "backend_configuration.ini")
 
 
 _backend = None
@@ -132,17 +105,6 @@ class MainCPythonBackend(MainBackend):
         report_time("Before loading plugins")
         execute_with_frontend_sys_path(self._load_plugins)
         report_time("After loading plugins")
-        
-        # Install friendly-traceback for French error messages
-        try:
-            import friendly_traceback
-            friendly_traceback.install(lang="fr")
-            logger.info("friendly-traceback installed with French language")
-        except ImportError:
-            logger.warning("friendly-traceback not available")
-        except Exception as e:
-            logger.exception("Error installing friendly-traceback: %s", e)
-        
         if self._options.get("run.warn_module_shadowing", False):
             sys.addaudithook(self.import_audit_hook)
 
@@ -226,7 +188,7 @@ class MainCPythonBackend(MainBackend):
             user_dir = os.getcwd()
 
         # rough test to see if it's worth invoking the finder
-        for ext in ["", ".py", ".pyw", ".pyde"]:
+        for ext in ["", ".py", ".pyw"]:
             pot_path = os.path.join(user_dir, root_module_name + ext)
             if os.path.exists(pot_path):
                 logger.debug("Found import candidate: %r", pot_path)
@@ -461,12 +423,10 @@ class MainCPythonBackend(MainBackend):
             prefix=sys.prefix,
             welcome_text=f"Python {get_python_version_string()} ({sys.executable})",
             executable=sys.executable,
-            base_executable=try_get_base_executable(sys.executable),
             exe_dirs=get_exe_dirs(),
             in_venv=running_in_virtual_environment(),
             python_version=get_python_version_string(),
             cwd=os.getcwd(),
-            logfile=thonny.get_backend_log_file(),
         )
 
     def _cmd_cd(self, cmd):
@@ -603,7 +563,7 @@ class MainCPythonBackend(MainBackend):
 
     def _cmd_get_active_distributions(self, cmd):
         return dict(
-            distributions=export_installed_distributions_info(),
+            distributions=self._get_distributions_info(),
         )
 
     def _cmd_install_distributions(self, cmd):
@@ -653,7 +613,7 @@ class MainCPythonBackend(MainBackend):
                 .replace("<class '", "")
                 .replace("'>", "")
                 .strip(),
-                "attributes": self.export_variables(attributes, all_variables=True),
+                "attributes": self.export_variables(attributes),
             }
 
             if isinstance(value, io.TextIOWrapper):
@@ -705,14 +665,49 @@ class MainCPythonBackend(MainBackend):
             except Exception as e:
                 print("Could not delete %s: %s" % (path, str(e)), file=sys.stderr)
 
-    def _perform_pip_operation_and_list(self, cmd_line: List[str]) -> Tuple[int, List[DistInfo]]:
+    def _perform_pip_operation_and_list(
+        self, cmd_line: List[str]
+    ) -> Tuple[int, Dict[str, DistInfo]]:
         extra_switches = ["--disable-pip-version-check"]
         proxy = os.environ.get("https_proxy", os.environ.get("http_proxy", None))
         if proxy:
             extra_switches.append("--proxy=" + proxy)
 
         returncode = subprocess.call([sys.executable, "-m", "pip"] + extra_switches + cmd_line)
-        return returncode, export_installed_distributions_info()
+        return returncode, self._get_distributions_info()
+
+    def _get_distributions_info(self) -> Dict[str, DistInfo]:
+        # Avoiding pip, because pip is slow.
+        # If it is called after first installation to user site packages
+        # this dir is not yet in sys.path
+        # This would be required also when using Python 3.8 and importlib.metadata.distributions()
+        if (
+            site.ENABLE_USER_SITE
+            and site.getusersitepackages()
+            and os.path.exists(site.getusersitepackages())
+            and site.getusersitepackages() not in sys.path
+        ):
+            # insert before first site packages item
+            for i, item in enumerate(sys.path):
+                if "site-packages" in item or "dist-packages" in item:
+                    sys.path.insert(i, site.getusersitepackages())
+                    break
+            else:
+                sys.path.append(site.getusersitepackages())
+
+        import pkg_resources
+
+        # TODO: consider using importlib.metadata.distributions()
+        pkg_resources._initialize_master_working_set()
+        return {
+            dist.key: DistInfo(
+                key=dist.key,
+                project_name=dist.project_name,
+                location=dist.location,
+                version=dist.version,
+            )
+            for dist in pkg_resources.working_set  # pylint: disable=not-an-iterable
+        }
 
     def _get_sep(self) -> str:
         return os.path.sep
@@ -734,16 +729,16 @@ class MainCPythonBackend(MainBackend):
             return {
                 "path": path,
                 "kind": kind,
-                "size_bytes": None if kind == "dir" else os.path.getsize(path),
-                "modified_epoch": os.path.getmtime(path),
+                "size": None if kind == "dir" else os.path.getsize(path),
+                "modified": os.path.getmtime(path),
                 "error": None,
             }
         except OSError as e:
             return {
                 "path": path,
                 "kind": None,
-                "size_bytes": None,
-                "modified_epoch": None,
+                "size": None,
+                "modified": None,
                 "error": str(e),
             }
 
@@ -855,11 +850,9 @@ class MainCPythonBackend(MainBackend):
         self._current_executor = executor_class(self, cmd)
         report_time("Done creating executor")
         try:
-            result = self._current_executor.execute_source(
+            return self._current_executor.execute_source(
                 source, filename, execution_mode, ast_postprocessors
             )
-            result["source_for_language_server"] = source
-            return result
         except SystemExit as e:
             sys.exit(e.code)
         finally:
@@ -921,6 +914,8 @@ class MainCPythonBackend(MainBackend):
 
         self._original_stdout.write(serialize_message(msg) + "\n")
         self._original_stdout.flush()
+        if isinstance(msg, ToplevelResponse):
+            self._check_load_jedi()
 
     def export_value(self, value, max_repr_length=5000):
         self._heap[id(value)] = value
@@ -935,12 +930,12 @@ class MainCPythonBackend(MainBackend):
 
         return ValueInfo(id(value), rep)
 
-    def export_variables(self, variables, all_variables=False):
+    def export_variables(self, variables):
         result = {}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             for name in variables:
-                if not name.startswith("__") or all_variables:
+                if not name.startswith("__"):
                     result[name] = self.export_value(variables[name], 100)
 
         return result
@@ -1134,12 +1129,6 @@ class FakeOutputStream(FakeStream):
                 data = data.decode(errors="replace")
 
             if data != "":
-                # Translate stderr error messages to French
-                if self._stream_name == "stderr":
-                    original = data
-                    data = _translate_error(data)
-                    if original != data:
-                        logger.info("Translated: %r -> %r", original, data)
                 self._backend._send_output(data=data, stream_name=self._stream_name)
                 self._processed_symbol_count += len(data)
         finally:
@@ -1334,13 +1323,13 @@ class Executor:
     def _instrument_repl_code(self, root):
         # modify all expression statements to print and register their non-None values
         for node in ast.walk(root):
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            if (
+                isinstance(node, ast.FunctionDef)
+                or hasattr(ast, "AsyncFunctionDef")
+                and isinstance(node, ast.AsyncFunctionDef)
+            ):
                 first_stmt = node.body[0]
-                if (
-                    isinstance(first_stmt, ast.Expr)
-                    and isinstance(first_stmt.value, ast.Constant)
-                    and isinstance(first_stmt.value.value, str)
-                ):
+                if isinstance(first_stmt, ast.Expr) and isinstance(first_stmt.value, ast.Str):
                     first_stmt.contains_docstring = True
             if isinstance(node, ast.Expr) and not getattr(node, "contains_docstring", False):
                 node.value = ast.Call(
@@ -1441,15 +1430,20 @@ def format_exception_with_frame_info(e_type, e_value, e_traceback, shorten_filen
                         or not isinstance(e_value, SyntaxError)
                     )
                 ):
-                    fmt = "".join(traceback.format_list([entry]))
+                    fmt = '  File "{}", line {}, in {}\n'.format(
+                        entry.filename, entry.lineno, entry.name
+                    )
+
+                    if entry.line:
+                        fmt += "    {}\n".format(entry.line.strip())
+
                     yield (fmt, id(tb_temp.tb_frame), entry.filename, entry.lineno)
 
                 tb_temp = tb_temp.tb_next
 
             assert tb_temp is None  # tb was exhausted
 
-        # using format_exception with limit instead of format_exception_only because latter doesn't give extended info
-        for line in traceback.format_exception(etype, value, tb, limit=0):
+        for line in traceback.format_exception_only(etype, value):
             if etype is SyntaxError and line.endswith("^\n"):
                 # for some reason it may add several empty lines before ^-line
                 partlines = line.splitlines()
@@ -1472,7 +1466,10 @@ def _is_library_file(filename):
     return (
         filename is None
         or path_startswith(filename, sys.prefix)
-        or path_startswith(filename, sys.base_prefix)
+        or hasattr(sys, "base_prefix")
+        and path_startswith(filename, sys.base_prefix)
+        or hasattr(sys, "real_prefix")
+        and path_startswith(filename, getattr(sys, "real_prefix"))
         or site.ENABLE_USER_SITE
         and path_startswith(filename, site.getusersitepackages())
     )

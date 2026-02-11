@@ -3,6 +3,7 @@ import queue
 import signal
 import subprocess
 import threading
+import time
 import tkinter as tk
 from logging import getLogger
 from tkinter import messagebox, ttk
@@ -66,23 +67,13 @@ class WorkDialog(CommonDialog):
 
     def init_instructions_frame(self):
         instructions = self.get_instructions()
-        # Aqua doesn't allow changing ttk.Frame background via theming
-        tip_background = get_style_configuration("Tip.TFrame")["background"]
-        tip_foreground = get_style_configuration("Tip.TLabel")["foreground"]
-
-        self.instructions_frame = tk.Frame(self, background=tip_background)
+        self.instructions_frame = ttk.Frame(self, style="Tip.TFrame")
         self.instructions_frame.grid(row=0, column=0, sticky="nsew")
         self.instructions_frame.rowconfigure(0, weight=1)
         self.instructions_frame.columnconfigure(0, weight=1)
 
         pad = self.get_large_padding()
-        self.instructions_label = tk.Label(
-            self,
-            background=tip_background,
-            text=instructions,
-            justify="left",
-            foreground=tip_foreground,
-        )
+        self.instructions_label = ttk.Label(self, style="Tip.TLabel", text=instructions)
         self.instructions_label.grid(row=0, column=0, sticky="w", padx=pad, pady=pad)
 
     def get_instructions(self) -> Optional[str]:
@@ -394,11 +385,8 @@ class SubprocessDialog(WorkDialog):
     """Shows incrementally the output of given subprocess.
     Allows cancelling"""
 
-    def __init__(
-        self, master, prepared_proc=None, title="Subprocess", long_description=None, autostart=True
-    ):
-        self._proc = None
-        self._prepared_proc = prepared_proc
+    def __init__(self, master, proc, title, long_description=None, autostart=True):
+        self._proc = proc
         self.stdout = ""
         self.stderr = ""
         self._stdout_thread = None
@@ -418,14 +406,7 @@ class SubprocessDialog(WorkDialog):
     def get_instructions(self) -> Optional[str]:
         return self._long_description
 
-    def start_subprocess(self):
-        if self._prepared_proc:
-            return self._prepared_proc
-        else:
-            raise RuntimeError("No process provided")
-
     def start_work(self):
-        self._proc = self.start_subprocess()
         if hasattr(self._proc, "cmd"):
             try:
                 self.append_text(subprocess.list2cmdline(self._proc.cmd) + "\n")

@@ -7,11 +7,12 @@ import ast
 import os.path
 import tkinter as tk
 import tokenize
-from _tkinter import TclError
 from logging import getLogger
 from tkinter import ttk
 from tkinter.messagebox import showinfo
 from typing import List, Union  # @UnusedImport
+
+from _tkinter import TclError
 
 from thonny import (
     ast_utils,
@@ -25,7 +26,6 @@ from thonny import (
 )
 from thonny.codeview import CodeView, SyntaxText, get_syntax_options_for_tag
 from thonny.common import DebuggerCommand, InlineCommand
-from thonny.custom_notebook import CustomNotebook
 from thonny.languages import tr
 from thonny.memory import VariablesFrame
 from thonny.misc_utils import running_on_mac_os, running_on_rpi, shorten_repr
@@ -166,11 +166,12 @@ class SingleWindowDebugger(Debugger):
 
     def get_run_to_cursor_breakpoint(self):
         editor = get_workbench().get_editor_notebook().get_current_editor()
-        if editor and editor.is_local():
+        if editor:
+            filename = editor.get_filename()
             selection = editor.get_code_view().get_selected_range()
             lineno = selection.lineno
-            if editor.get_target_path() and lineno:
-                return editor.get_target_path(), lineno
+            if filename and lineno:
+                return filename, lineno
 
         return None
 
@@ -226,11 +227,9 @@ class SingleWindowDebugger(Debugger):
                 frame_info.locals,
                 frame_info.globals,
                 frame_info.freevars,
-                (
-                    frame_info.module_name
-                    if frame_info.code_name == "<module>"
-                    else frame_info.code_name
-                ),
+                frame_info.module_name
+                if frame_info.code_name == "<module>"
+                else frame_info.code_name,
             )
 
     def handle_debugger_return(self, msg):
@@ -953,17 +952,18 @@ class DialogVisualizer(CommonDialog, FrameVisualizer):
         self.main_frame.grid(sticky=tk.NSEW)
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        self.main_pw = ui_utils.WorkbenchPanedWindow(self.main_frame, orient=tk.VERTICAL)
+        self.main_pw = ui_utils.AutomaticPanedWindow(self.main_frame, orient=tk.VERTICAL)
         self.main_pw.grid(sticky=tk.NSEW, padx=10, pady=10)
         self.main_frame.rowconfigure(0, weight=1)
         self.main_frame.columnconfigure(0, weight=1)
 
-        self._code_book = CustomNotebook(self.main_pw, closable=False)
+        self._code_book = ttk.Notebook(self.main_pw)
         self._text_frame = CodeView(
             self._code_book, first_line_number=frame_info.firstlineno, font="EditorFont"
         )
         self._code_book.add(self._text_frame, text=tr("Source code"))
-        self.main_pw.add(self._code_book, minsize=200, height=400)
+        self.main_pw.add(self._code_book, minsize=200)
+        self._code_book.preferred_size_in_pw = 400
 
     def _load_code(self, frame_info):
         self._text_frame.set_content(frame_info.source)
@@ -1000,10 +1000,11 @@ class FunctionCallDialog(DialogVisualizer):
 
     def _init_layout_widgets(self, master, frame_info):
         DialogVisualizer._init_layout_widgets(self, master, frame_info)
-        self._locals_book = CustomNotebook(self.main_pw, closable=False)
+        self._locals_book = ttk.Notebook(self.main_pw)
         self._locals_frame = VariablesFrame(self._locals_book)
+        self._locals_book.preferred_size_in_pw = 200
         self._locals_book.add(self._locals_frame, text=tr("Local variables"))
-        self.main_pw.add(self._locals_book, minsize=100, height=200)
+        self.main_pw.add(self._locals_book, minsize=100)
 
     def _load_code(self, frame_info):
         DialogVisualizer._load_code(self, frame_info)
@@ -1318,7 +1319,7 @@ def load_plugin() -> None:
         group=10,
         image="debug-current-script",
         include_in_menu=False,
-        include_in_toolbar=False,
+        include_in_toolbar=True,
     )
 
     get_workbench().add_command(
@@ -1354,7 +1355,7 @@ def load_plugin() -> None:
         default_sequence="<F6>",
         group=30,
         image="step-over",
-        include_in_toolbar=False,
+        include_in_toolbar=True,
     )
 
     get_workbench().add_command(
@@ -1367,7 +1368,7 @@ def load_plugin() -> None:
         default_sequence="<F7>",
         group=30,
         image="step-into",
-        include_in_toolbar=False,
+        include_in_toolbar=True,
     )
 
     get_workbench().add_command(
@@ -1379,7 +1380,7 @@ def load_plugin() -> None:
         tester=lambda: _debugger_command_enabled("step_out"),
         group=30,
         image="step-out",
-        include_in_toolbar=False,
+        include_in_toolbar=True,
     )
 
     get_workbench().add_command(
@@ -1392,7 +1393,7 @@ def load_plugin() -> None:
         default_sequence="<F8>",
         group=30,
         image="resume",
-        include_in_toolbar=False,
+        include_in_toolbar=not get_workbench().in_simple_mode(),
     )
 
     get_workbench().add_command(

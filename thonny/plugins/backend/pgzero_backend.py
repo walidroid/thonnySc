@@ -3,7 +3,7 @@ import os
 import sys
 from logging import getLogger
 
-from thonny.plugins.cpython_backend import get_backend
+from thonny.plugins.cpython_backend import MainCPythonBackend, get_backend
 
 logger = getLogger(__name__)
 
@@ -66,11 +66,24 @@ def augment_ast(root):
         ast.Call(ast.Attribute(ast.Name("__pgzrun", ast.Load()), "go", ast.Load()), [], [])
     )
     go.lineno = 1000000
-    go.end_lineno = 1000000
     go.col_offset = 0
     ast.fix_missing_locations(go)
     go.tags = {"ignore"}
     root.body.append(go)
+
+
+def patched_editor_autocomplete(self, cmd):
+    logger.debug("Starting patched _cmd_editor_autocomplete")
+    # Make extra builtins visible for Jedi
+    prefix = "from pgzero.builtins import *\n"
+    cmd["source"] = prefix + cmd["source"]
+    cmd["row"] = cmd["row"] + 1
+
+    result = get_backend()._original_editor_autocomplete(cmd)
+    result["row"] = result["row"] - 1
+    result["source"] = result["source"][len(prefix) :]
+
+    return result
 
 
 def load_plugin():
@@ -78,3 +91,5 @@ def load_plugin():
         return
 
     get_backend().add_ast_postprocessor(augment_ast)
+    MainCPythonBackend._original_editor_autocomplete = MainCPythonBackend._cmd_editor_autocomplete
+    MainCPythonBackend._cmd_editor_autocomplete = patched_editor_autocomplete

@@ -17,12 +17,6 @@ def load_plugin():
         # Removed in Thonny 4.0
         wb.set_option("run.backend_name", "LocalCPython")
         wb.set_option("LocalCPython.executable", get_default_cpython_executable_for_backend())
-    
-    # Force LocalCPython (Python 3) as the default backend on startup
-    # Override any saved backend preference (e.g., ESP32) to ensure
-    # Thonny always starts with Python 3 interpreter
-    if wb.get_option("run.backend_name") != "LocalCPython":
-        wb.set_option("run.backend_name", "LocalCPython")
 
     wb.add_backend(
         "LocalCPython",

@@ -1,10 +1,12 @@
 import tkinter as tk
+import traceback
 from logging import getLogger
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
-from thonny import get_workbench, lsp_types
+from thonny import get_workbench
 from thonny.codeview import CodeViewText, SyntaxText, get_syntax_options_for_tag
-from thonny.lsp_types import CompletionItem, MarkupContent, MarkupKind
+from thonny.common import SignatureInfo, SignatureParameter
+from thonny.editors import Editor
 from thonny.misc_utils import running_on_mac_os
 from thonny.shell import ShellText
 from thonny.tktextext import TextFrame
@@ -25,7 +27,6 @@ class EditorInfoBox(tk.Toplevel):
         self._target_text_widget: Optional[SyntaxText] = None
 
         get_workbench().bind("<FocusOut>", self._workbench_focus_out, True)
-        get_workbench().get_editor_notebook().bind("<<NotebookTabChanged>>", self.hide, True)
 
         # If the box has received focus, then it may lose it by a messagebox
         # or mouse click on the main window
@@ -87,7 +88,7 @@ class EditorInfoBox(tk.Toplevel):
         #    return
 
         # Need to close when another app or a Thonny's dialog appears
-        # (otherwise the box will float above this, at least in Linux).
+        # (othewise the box will float above this, at least in Linux).
         # Don't do anything if another EditorInfoBox appears
         for box in all_boxes:
             try:
@@ -233,23 +234,107 @@ class DocuBoxBase(EditorInfoBox):
     def _append_chars(self, chars, tags=()):
         self.text.direct_insert("end", chars, tags=tuple(tags))
 
+    def render_signatures(self, signatures: List[SignatureInfo], only_params=False) -> None:
+        for i, sig in enumerate(signatures):
+            if i > 0:
+                self._append_chars("\n")
+            self.render_signature(sig, only_params)
+
+    def render_signature(self, sig: SignatureInfo, only_params) -> None:
+        if not only_params:
+            self._append_chars(sig.name)
+
+        self._append_chars("(")
+
+        is_positional = False
+        is_kw_only = False
+
+        for i, param in enumerate(sig.params):
+            if i > 0:
+                self._append_chars(", ")
+            if len(sig.params) > 20:
+                self._append_chars("\n    ")
+
+            is_positional |= param.kind == "POSITIONAL_ONLY"
+            if is_positional and param.kind != "POSITIONAL_ONLY":
+                self._append_chars("/, ", ["marker"])
+                is_positional = False
+
+            if param.kind == "VAR_POSITIONAL":
+                is_kw_only = True
+            elif param.kind == "KEYWORD_ONLY" and not is_kw_only:
+                self._append_chars("*, ", ["marker"])
+                is_kw_only = True
+
+            is_active_parameter = sig.current_param_index == i
+            self.render_parameter(param, is_active_parameter)
+
+        if is_positional:
+            self._append_chars(", /", ["marker"])
+
+        self._append_chars(")")
+
+        if sig.return_type and not only_params:
+            self._append_chars(" -> ", ["marker"])
+            self._append_chars(sig.return_type, ["annotation"])
+
+    def render_parameter(self, param: SignatureParameter, active: bool) -> None:
+        if active:
+            base_tags = ["active"]
+        else:
+            base_tags = []
+
+        if param.kind == "VAR_POSITIONAL":
+            self._append_chars("*", base_tags)
+        elif param.kind == "VAR_KEYWORD":
+            self._append_chars("**", base_tags)
+
+        self._append_chars(param.name, base_tags)
+
+        if param.annotation:
+            self._append_chars(":\u00A0" + param.annotation, base_tags + ["annotation"])
+
+        if param.default:
+            self._append_chars("=" + param.default, base_tags + ["default"])
+
+    def format_signature(self, s: str) -> str:
+        s = s.replace(": ", ":\u00A0")
+        if len(s) > self.text["width"] * 1.8 and s.count("(") and s.count(")"):
+            args_index = s.index("(") + 1
+            suffix_index = s.rindex(")")
+            prefix = s[:args_index]
+            args = s[args_index:suffix_index].split(", ")
+            suffix = s[suffix_index:]
+            s = prefix + "\n  " + ",\n  ".join(args) + "\n" + suffix
+            # don't keep / and * alone on a line
+            s = (
+                s.replace("\n  /,", " /,")
+                .replace("\n  *,", " *,")
+                .replace("\n  /\n)", " /\n)")
+                .replace("\n  *\n)", " *\n)")
+            )
+            return s
+        else:
+            return s
+
 
 class DocuBox(DocuBoxBase):
     def __init__(self):
         super().__init__(show_vertical_scrollbar=True)
 
-    def set_content(self, completion: CompletionItem):
+    def set_content(self, name, item_type, signatures, docstring):
         self.text.direct_delete("1.0", "end")
-        if completion.documentation is not None:
-            if isinstance(completion.documentation, MarkupContent):
-                if completion.documentation.kind == MarkupKind.Markdown:
-                    logger.warning("TODO: support Markdown")
-                text = completion.documentation.value
-            else:
-                assert isinstance(completion.documentation, str)
-                text = completion.documentation
 
-            self._append_chars(text, ["prose"])
+        # self._append_chars(item_type + "\n")
+
+        if signatures:
+            self.render_signatures(signatures)
+
+        if signatures and docstring:
+            self._append_chars("\n\n")
+
+        if docstring:
+            self._append_chars(docstring, ["prose"])
 
 
 def get_active_text_widget() -> Optional[SyntaxText]:
@@ -265,16 +350,15 @@ def get_cursor_position(text: SyntaxText) -> Tuple[int, int]:
     return int(parts[0]), int(parts[1])
 
 
-def get_cursor_ls_position(
-    text: SyntaxText, cursor_line_offset: int = 0, cursor_column_offset: int = 0
-) -> lsp_types.Position:
-    row, col = get_cursor_position(text)
-    row += cursor_line_offset
-    col += cursor_column_offset
+def get_text_filename(text: SyntaxText) -> Optional[str]:
+    if isinstance(text, ShellText):
+        return "<Shell>"
+    elif isinstance(text, CodeViewText):
+        editor = getattr(text.master, "home_widget")
+        if isinstance(editor, Editor):
+            return editor.get_filename()
 
-    # TODO: convert char position to UFT-16 items
-    logger.warning("NB! convert to UTF-16 points")
-    return lsp_types.Position(line=row - 1, character=col)
+    return None
 
 
 def get_relevant_source_and_cursor_position(text: SyntaxText) -> Tuple[str, int, int]:

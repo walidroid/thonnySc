@@ -2,19 +2,18 @@ import textwrap
 import tkinter as tk
 from tkinter import font as tk_font
 from tkinter import ttk
-from typing import List, Optional
 
 from thonny import get_workbench, tktextext, ui_utils
 from thonny.codeview import CodeView
 from thonny.config_ui import ConfigurationPage
 from thonny.languages import tr
 from thonny.shell import BaseShellText
-from thonny.ui_utils import create_string_var
+from thonny.ui_utils import create_string_var, scrollbar_style
 
 
 class ThemeAndFontConfigurationPage(ConfigurationPage):
     def __init__(self, master):
-        super().__init__(master)
+        ConfigurationPage.__init__(self, master)
 
         self._init_themes()
         self._init_fonts()
@@ -27,13 +26,14 @@ class ThemeAndFontConfigurationPage(ConfigurationPage):
         self.rowconfigure(21, weight=1)
 
     def _init_themes(self):
+        self._original_ui_theme = get_workbench().get_option("view.ui_theme")
+        self._original_syntax_theme = get_workbench().get_option("view.syntax_theme")
+
         self._ui_theme_variable = create_string_var(
-            get_workbench().get_option("view.ui_theme"),
-            modification_listener=self._update_appearance,
+            self._original_ui_theme, modification_listener=self._update_appearance
         )
         self._syntax_theme_variable = create_string_var(
-            get_workbench().get_option("view.syntax_theme"),
-            modification_listener=self._update_appearance,
+            self._original_syntax_theme, modification_listener=self._update_appearance
         )
 
         ttk.Label(self, text=tr("UI theme")).grid(
@@ -63,21 +63,22 @@ class ThemeAndFontConfigurationPage(ConfigurationPage):
         self._syntax_theme_combo.grid(row=2, column=2, sticky="nwe", pady=(0, 5))
 
     def _init_fonts(self):
+        self._original_editor_family = get_workbench().get_option("view.editor_font_family")
+        self._original_editor_size = get_workbench().get_option("view.editor_font_size")
+        self._original_io_family = get_workbench().get_option("view.io_font_family")
+        self._original_io_size = get_workbench().get_option("view.io_font_size")
+
         self._editor_family_variable = create_string_var(
-            get_workbench().get_option("view.editor_font_family"),
-            modification_listener=self._update_appearance,
+            self._original_editor_family, modification_listener=self._update_appearance
         )
         self._editor_size_variable = create_string_var(
-            get_workbench().get_option("view.editor_font_size"),
-            modification_listener=self._update_appearance,
+            self._original_editor_size, modification_listener=self._update_appearance
         )
         self._io_family_variable = create_string_var(
-            get_workbench().get_option("view.io_font_family"),
-            modification_listener=self._update_appearance,
+            self._original_io_family, modification_listener=self._update_appearance
         )
         self._io_size_variable = create_string_var(
-            get_workbench().get_option("view.io_font_size"),
-            modification_listener=self._update_appearance,
+            self._original_io_size, modification_listener=self._update_appearance
         )
 
         ttk.Label(self, text=tr("Editor font")).grid(
@@ -166,6 +167,8 @@ class ThemeAndFontConfigurationPage(ConfigurationPage):
             text_class=BaseShellText,
             height=4,
             width=30,
+            vertical_scrollbar_style=scrollbar_style("Vertical"),
+            horizontal_scrollbar_style=scrollbar_style("Horizontal"),
             horizontal_scrollbar_class=ui_utils.AutoScrollbar,
             relief="groove",
             borderwidth=1,
@@ -181,9 +184,9 @@ class ThemeAndFontConfigurationPage(ConfigurationPage):
             font="BoldTkDefaultFont",
         ).grid(row=40, column=1, columnspan=5, sticky="w", pady=(5, 0))
 
-    def apply(self, changed_options: List[str]) -> bool:
+    def apply(self):
         # don't do anything, as preview already did the thing
-        return True
+        return
 
     def cancel(self):
         if (
@@ -192,6 +195,12 @@ class ThemeAndFontConfigurationPage(ConfigurationPage):
             or getattr(self._ui_theme_variable, "modified")
             or getattr(self._syntax_theme_variable, "modified")
         ):
+            get_workbench().set_option("view.ui_theme", self._original_ui_theme)
+            get_workbench().set_option("view.syntax_theme", self._original_syntax_theme)
+            get_workbench().set_option("view.editor_font_size", self._original_editor_size)
+            get_workbench().set_option("view.editor_font_family", self._original_editor_family)
+            get_workbench().set_option("view.io_font_size", self._original_io_size)
+            get_workbench().set_option("view.io_font_family", self._original_io_family)
             get_workbench().reload_themes()
             get_workbench().update_fonts()
 

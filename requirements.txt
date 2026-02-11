@@ -13,4 +13,3 @@ qt5_applications
 
 
 friendly-traceback
-minny

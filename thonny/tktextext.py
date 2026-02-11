@@ -8,6 +8,7 @@ from logging import getLogger
 from tkinter import TclError
 from tkinter import font as tkfont
 from tkinter import ttk
+from typing import Optional
 
 logger = getLogger(__name__)
 
@@ -15,11 +16,11 @@ logger = getLogger(__name__)
 class TweakableText(tk.Text):
     """Allows intercepting Text commands at Tcl-level"""
 
-    def __init__(self, master=None, cnf={}, read_only=False, suppress_events=False, **kw):
+    def __init__(self, master=None, cnf={}, read_only=False, **kw):
         super().__init__(master=master, cnf=cnf, **kw)
 
         self._read_only = read_only
-        self._suppress_events = suppress_events
+        self._suppress_events = False
         self._edit_count: int = 0
         self._last_operation_time: float = time.time()
 
@@ -31,7 +32,6 @@ class TweakableText(tk.Text):
         self._original_insert = self._register_tk_proxy_function("insert", self.intercept_insert)
         self._original_delete = self._register_tk_proxy_function("delete", self.intercept_delete)
         self._original_mark = self._register_tk_proxy_function("mark", self.intercept_mark)
-        self.bind("<Control-Tab>", self._redirect_ctrl_tab, False)
 
     def _register_tk_proxy_function(self, operation, function):
         self._tk_proxies[operation] = function
@@ -194,10 +194,6 @@ class TweakableText(tk.Text):
         if not self._suppress_events:
             self.event_generate("<<TextChange>>")
 
-    def _redirect_ctrl_tab(self, event):
-        self.winfo_toplevel().event_generate("<<ControlTabInText>>", state=event.state)
-        return "break"
-
 
 class EnhancedText(TweakableText):
     """Text widget with extra navigation and editing aids.
@@ -207,16 +203,7 @@ class EnhancedText(TweakableText):
     Most of the code is adapted from idlelib.EditorWindow.
     """
 
-    def __init__(
-        self,
-        master,
-        indent_width: int = 4,
-        tab_width: int = 4,
-        style="Text",
-        tag_current_line=False,
-        cnf={},
-        **kw,
-    ):
+    def __init__(self, master=None, style="Text", tag_current_line=False, cnf={}, **kw):
         # Parent class shouldn't autoseparate
         # TODO: take client provided autoseparators value into account
         kw["autoseparators"] = False
@@ -224,8 +211,8 @@ class EnhancedText(TweakableText):
         self._original_options = kw.copy()
 
         super().__init__(master=master, cnf=cnf, **kw)
-        self.tab_width = tab_width
-        self.indent_width = indent_width
+        self.tabwidth = 4
+        self.indent_width = 4
 
         self._last_event_kind = None
         self._last_key_time = None
@@ -418,7 +405,7 @@ class EnhancedText(TweakableText):
 
         # Ick.  It may require *inserting* spaces if we back up over a
         # tab character!  This is written to be clear, not fast.
-        have = len(chars.expandtabs(self.tab_width))
+        have = len(chars.expandtabs(self.tabwidth))
         assert have > 0
         want = ((have - 1) // self.indent_width) * self.indent_width
         # Debug prompt is multilined....
@@ -432,7 +419,7 @@ class EnhancedText(TweakableText):
                 break
             chars = chars[:-1]
             ncharsdeleted = ncharsdeleted + 1
-            have = len(chars.expandtabs(self.tab_width))
+            have = len(chars.expandtabs(self.tabwidth))
             if have <= want or chars[-1] not in " \t":
                 break
         text.delete("insert-%dc" % ncharsdeleted, "insert")
@@ -467,7 +454,7 @@ class EnhancedText(TweakableText):
             self.delete(first, last)
             self.mark_set("insert", first)
         prefix = self.get("insert linestart", "insert")
-        raw, effective = classifyws(prefix, self.tab_width)
+        raw, effective = classifyws(prefix, self.tabwidth)
         if raw == len(prefix):
             # only whitespace to the left
             self._reindent_to(effective + self.indent_width)
@@ -476,7 +463,7 @@ class EnhancedText(TweakableText):
             if self.should_indent_with_tabs():
                 pad = "\t"
             else:
-                effective = len(prefix.expandtabs(self.tab_width))
+                effective = len(prefix.expandtabs(self.tabwidth))
                 n = self.indent_width
                 pad = " " * (n - effective % n)
             self.insert("insert", pad)
@@ -613,7 +600,7 @@ class EnhancedText(TweakableText):
         for pos in range(len(lines)):
             line = lines[pos]
             if line:
-                raw, effective = classifyws(line, self.tab_width)
+                raw, effective = classifyws(line, self.tabwidth)
                 if increase:
                     effective = effective + self.indent_width
                 else:
@@ -696,7 +683,7 @@ class EnhancedText(TweakableText):
     def _make_blanks(self, n):
         # Make string that displays as n leading blanks.
         if self.should_indent_with_tabs():
-            ntabs, nspaces = divmod(n, self.tab_width)
+            ntabs, nspaces = divmod(n, self.tabwidth)
             return "\t" * ntabs + " " * nspaces
         else:
             return " " * n
@@ -800,29 +787,24 @@ class EnhancedText(TweakableText):
         super().direct_insert(index, chars, tags, **kw)
 
 
-class TextFrame(tk.Frame):
+class TextFrame(ttk.Frame):
     "Decorates text with scrollbars, listens for theme changes"
 
     def __init__(
         self,
         master,
-        indent_width: int = 4,
-        tab_width: int = 4,
         text_class=EnhancedText,
         horizontal_scrollbar=True,
         vertical_scrollbar=True,
         vertical_scrollbar_class=ttk.Scrollbar,
-        vertical_scrollbar_rowspan=1,
         horizontal_scrollbar_class=ttk.Scrollbar,
+        vertical_scrollbar_style=None,
+        horizontal_scrollbar_style=None,
         borderwidth=0,
-        background=None,
         relief="sunken",
         **text_options,
     ):
-        self._vertical_scrollbar_rowspan = vertical_scrollbar_rowspan
-        tk.Frame.__init__(
-            self, master=master, borderwidth=borderwidth, relief=relief, background=background
-        )
+        ttk.Frame.__init__(self, master=master, borderwidth=borderwidth, relief=relief)
 
         final_text_options = {
             "borderwidth": 0,
@@ -838,18 +820,18 @@ class TextFrame(tk.Frame):
         self.text = text_class(self, **final_text_options)
 
         if vertical_scrollbar:
-            self._vbar = vertical_scrollbar_class(self, orient=tk.VERTICAL)
+            self._vbar = vertical_scrollbar_class(
+                self, orient=tk.VERTICAL, style=vertical_scrollbar_style
+            )
             self._vbar["command"] = self._vertical_scroll
             self.text["yscrollcommand"] = self._vertical_scrollbar_update
-            from thonny.ui_utils import check_create_aqua_scrollbar_stripe
-
-            self._vbar_stripe = check_create_aqua_scrollbar_stripe(self)
         else:
             self._vbar = None
-            self._vbar_stripe = None
 
         if horizontal_scrollbar:
-            self._hbar = horizontal_scrollbar_class(self, orient=tk.HORIZONTAL)
+            self._hbar = horizontal_scrollbar_class(
+                self, orient=tk.HORIZONTAL, style=horizontal_scrollbar_style
+            )
             self._hbar["command"] = self._horizontal_scroll
             self.text["xscrollcommand"] = self._horizontal_scrollbar_update
         else:
@@ -870,14 +852,9 @@ class TextFrame(tk.Frame):
     def grid_main_widgets(self):
         self.text.grid(row=0, column=1, sticky=tk.NSEW)
         if self._vbar:
-            self._vbar.grid(
-                row=0, column=2, sticky=tk.NSEW, rowspan=self._vertical_scrollbar_rowspan
-            )
-            if self._vbar_stripe:
-                self._vbar_stripe.grid(row=0, column=2, sticky="nse")
-                self._vbar_stripe.tkraise()
+            self._vbar.grid(row=0, column=2, sticky=tk.NSEW)
         if self._hbar:
-            self._hbar.grid(row=1, column=0, sticky=tk.NSEW, columnspan=2)
+            self._hbar.grid(row=1, column=0, sticky=tk.NSEW, columnspan=3)
 
     def focus_set(self):
         self.text.focus_set()
@@ -913,8 +890,6 @@ class EnhancedTextFrame(TextFrame):
     def __init__(
         self,
         master,
-        indent_width: int = 4,
-        tab_width: int = 4,
         line_numbers=False,
         line_length_margin=0,
         first_line_number=1,
@@ -923,6 +898,8 @@ class EnhancedTextFrame(TextFrame):
         vertical_scrollbar=True,
         vertical_scrollbar_class=ttk.Scrollbar,
         horizontal_scrollbar_class=ttk.Scrollbar,
+        vertical_scrollbar_style=None,
+        horizontal_scrollbar_style=None,
         borderwidth=0,
         relief="sunken",
         gutter_background="#e0e0e0",
@@ -933,13 +910,13 @@ class EnhancedTextFrame(TextFrame):
 
         super().__init__(
             master,
-            indent_width=indent_width,
-            tab_width=tab_width,
             text_class=text_class,
             horizontal_scrollbar=horizontal_scrollbar,
             vertical_scrollbar=vertical_scrollbar,
             vertical_scrollbar_class=vertical_scrollbar_class,
             horizontal_scrollbar_class=horizontal_scrollbar_class,
+            vertical_scrollbar_style=vertical_scrollbar_style,
+            horizontal_scrollbar_style=horizontal_scrollbar_style,
             borderwidth=borderwidth,
             relief=relief,
             **text_options,
@@ -1215,7 +1192,7 @@ def get_text_font(text):
         return font
 
 
-def classifyws(s, tab_width):
+def classifyws(s, tabwidth):
     raw = effective = 0
     for ch in s:
         if ch == " ":
@@ -1223,7 +1200,7 @@ def classifyws(s, tab_width):
             effective = effective + 1
         elif ch == "\t":
             raw = raw + 1
-            effective = (effective // tab_width + 1) * tab_width
+            effective = (effective // tabwidth + 1) * tabwidth
         else:
             break
     return raw, effective

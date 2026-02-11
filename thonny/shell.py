@@ -1,26 +1,16 @@
 # -*- coding: utf-8 -*-
 
 import os.path
-import pathlib
 import re
 import tkinter as tk
 import traceback
-from _tkinter import TclError
-from dataclasses import dataclass
 from logging import getLogger
 from tkinter import ttk
-from typing import List, Optional
+from typing import cast
 
-from thonny import (
-    get_runner,
-    get_shell,
-    get_workbench,
-    lsp_types,
-    memory,
-    roughparse,
-    running,
-    ui_utils,
-)
+from _tkinter import TclError
+
+from thonny import get_runner, get_shell, get_workbench, memory, roughparse, running, ui_utils
 from thonny.codeview import SyntaxText, get_syntax_options_for_tag, perform_python_return
 from thonny.common import (
     OBJECT_LINK_END,
@@ -31,20 +21,7 @@ from thonny.common import (
     ToplevelCommand,
     ToplevelResponse,
 )
-from thonny.custom_notebook import CustomNotebook
 from thonny.languages import tr
-from thonny.lsp_proxy import LanguageServerProxy
-from thonny.lsp_types import (
-    DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams,
-    Position,
-    Range,
-    RangedTextDocumentContentChangeEvent,
-    TextDocumentIdentifier,
-    TextDocumentItem,
-    VersionedTextDocumentIdentifier,
-)
 from thonny.misc_utils import construct_cmd_line, parse_cmd_line
 from thonny.running import EDITOR_CONTENT_TOKEN
 from thonny.tktextext import TextFrame, TweakableText, index2line
@@ -52,13 +29,13 @@ from thonny.ui_utils import (
     CommonDialog,
     EnhancedTextWithLogging,
     TextMenu,
-    compute_tab_stops,
     create_tooltip,
     ems_to_pixels,
     get_beam_cursor,
     get_hyperlink_cursor,
     lookup_style_option,
     replace_unsupported_chars,
+    scrollbar_style,
     select_sequence,
     show_dialog,
     tr_btn,
@@ -100,77 +77,9 @@ ANSI_COLOR_NAMES = {
 }
 
 
-
-ERROR_TRANSLATIONS = {
-    # NameError
-    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n'est pas définie",
-    
-    # SyntaxError
-    r"SyntaxError: invalid syntax": r"SyntaxError : syntaxe invalide",
-    r"SyntaxError: expected ':'": r"SyntaxError : « : » attendu",
-    r"SyntaxError: unterminated string literal \(detected at line (\d+)\)": r"SyntaxError : chaîne de caractères non terminée (détectée à la ligne \1)",
-    r"SyntaxError: EOL while scanning string literal": r"SyntaxError : fin de ligne lors de l'analyse d'une chaîne de caractères",
-    r"SyntaxError: unexpected EOF while parsing": r"SyntaxError : fin de fichier inattendue lors de l'analyse",
-    
-    # IndentationError
-    r"IndentationError: unexpected indent": r"IndentationError : indentation inattendue",
-    r"IndentationError: expected an indented block": r"IndentationError : un bloc indenté est attendu",
-    r"IndentationError: expected an indented block after '(.*)' statement on line (\d+)": r"IndentationError : un bloc indenté est attendu après l'instruction « \1 » à la ligne \2",
-    r"IndentationError: unindent does not match any outer indentation level": r"IndentationError : la désindentation ne correspond à aucun niveau d'indentation externe",
-    
-    # TypeError
-    r"TypeError: (.*) takes (.*) positional argument but (.*) were given": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)",
-    r"TypeError: (.*) missing (.*) required positional arguments?: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
-    r"TypeError: can only concatenate str \(not \"(.*)\"\) to str": r"TypeError : on ne peut concaténer que des chaînes (pas « \1 ») avec des chaînes",
-    r"TypeError: unsupported operand type\(s\) for (.*): '(.*)' and '(.*)'": r"TypeError : type(s) d'opérande non supporté(s) pour \1 : « \2 » et « \3 »",
-    
-    # ValueError
-    r"ValueError: (.*)": r"ValueError : \1",
-    
-    # IndexError
-    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors intervalle",
-    
-    # KeyError
-    r"KeyError: (.*)": r"KeyError : clé \1 introuvable",
-    
-    # ZeroDivisionError
-    r"ZeroDivisionError: division by zero": r"ZeroDivisionError : division par zéro",
-    r"ZeroDivisionError: integer division or modulo by zero": r"ZeroDivisionError : division entière ou modulo par zéro",
-    
-    # ModuleNotFoundError / ImportError
-    r"ModuleNotFoundError: No module named '(.*)'": r"ModuleNotFoundError : Aucun module nommé « \1 »",
-    r"ImportError: cannot import name '(.*)' from '(.*)'": r"ImportError : impossible d'importer « \1 » depuis « \2 »",
-    
-    # AttributeError
-    r"AttributeError: '(.*)' object has no attribute '(.*)'": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »",
-    
-    # FileNotFoundError
-    r"FileNotFoundError: \[Errno 2\] No such file or directory: '(.*)'": r"FileNotFoundError : [Errno 2] Aucun fichier ou dossier de ce type : « \1 »",
-    
-    # RecursionError
-    r"RecursionError: maximum recursion depth exceeded": r"RecursionError : profondeur de récursion maximale dépassée",
-}
-
-def translate_error(text):
-    """Translate error messages to French."""
-    if not text:
-        return text
-    
-    for pattern, replacement in ERROR_TRANSLATIONS.items():
-        text = re.sub(pattern, replacement, text)
-    return text
-
-@dataclass
-class ExecutionInfo:
-    command_line: str
-    io_start_index: str
-    io_end_index: str
-
-
 class ShellView(tk.PanedWindow):
     def __init__(self, master):
         self._osc_title = None
-        self.containing_notebook: Optional[CustomNotebook] = None
         super().__init__(
             master,
             orient="horizontal",
@@ -182,7 +91,9 @@ class ShellView(tk.PanedWindow):
         main_frame = tk.Frame(self)
         self.add(main_frame, minsize=100)
 
-        self.vert_scrollbar = ttk.Scrollbar(main_frame, orient=tk.VERTICAL)
+        self.vert_scrollbar = ttk.Scrollbar(
+            main_frame, orient=tk.VERTICAL, style=scrollbar_style("Vertical")
+        )
         self.vert_scrollbar.grid(row=1, column=2, sticky=tk.NSEW)
         get_workbench().add_command(
             "clear_shell",
@@ -198,7 +109,6 @@ class ShellView(tk.PanedWindow):
         get_workbench().set_default("shell.tty_mode", True)
         get_workbench().set_default("shell.auto_inspect_values", True)
         get_workbench().set_default("shell.clear_for_new_process", True)
-        get_workbench().set_default("shell.io_tab_width", 8)
 
         self.text = ShellText(
             main_frame,
@@ -243,8 +153,21 @@ class ShellView(tk.PanedWindow):
 
     def set_osc_title(self, text: str) -> None:
         self._osc_title = text
-        if self.containing_notebook is not None:
-            self.containing_notebook.tab(self, self.get_tab_text())
+
+        if not hasattr(self, "home_widget"):
+            logger.warning("No home widget")
+            return
+
+        container = cast(ttk.Frame, getattr(self, "home_widget"))
+        notebook = cast(ttk.Notebook, container.master)
+
+        # Should update tab text only if the tab is present
+        for tab in notebook.winfo_children():
+            try:
+                if container == tab:
+                    notebook.tab(container, text=self.get_tab_text())
+            except TclError:
+                logger.exception("Could not update tab title")
 
     def init_plotter(self):
         self.plotter = None
@@ -315,10 +238,8 @@ class ShellView(tk.PanedWindow):
                 self.text.see("end")
 
     def print_error(self, txt):
-        was_scrolled_to_end = self.text.is_scrolled_to_end()
         self.text._insert_text_directly(txt, ("io", "stderr"))
-        if was_scrolled_to_end:
-            self.text.see("end")
+        self.text.see("end")
 
     def insert_command_link(self, txt, handler):
         self.text._insert_command_link(txt, handler)
@@ -378,10 +299,8 @@ class ShellView(tk.PanedWindow):
         if self.plotter is not None and self.plotter.winfo_ismapped():
             self.plotter.update_plot()
 
-    def update_appearance(self):
-        self.text.update_tab_stops()
-        self.text.indent_width = get_workbench().get_option("edit.indent_width")
-        self.text.tab_width = get_workbench().get_option("edit.tab_width")
+    def update_tabs(self):
+        self.text.update_tabs()
 
     def resize_plotter(self):
         if len(self.panes()) > 1 and self.text.winfo_width() > 5:
@@ -427,20 +346,12 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         self._last_main_file = None
         kw["tabstyle"] = "wordprocessor"
         kw["cursor"] = get_beam_cursor()
-        indent_width = get_workbench().get_option("edit.indent_width")
-        tab_width = get_workbench().get_option("edit.tab_width")
-        super().__init__(master, indent_width=indent_width, tab_width=tab_width, **kw)
+        super().__init__(master, **kw)
 
         self._command_history = (
             []
         )  # actually not really history, because each command occurs only once
         self._command_history_current_index = None
-
-        self._last_ls_cwd: str = get_workbench().get_local_cwd()
-        self._last_ls_uri: Optional[lsp_types.URI] = None
-        self._last_ls_version: Optional[int] = None
-        self._context_lines_for_language_server: List[str] = []
-        self._session_num_executed_lines_sent_to_ls: int = 0
 
         # logs of IO events for current toplevel block
         # (enables undoing and redoing the events)
@@ -522,7 +433,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         self.active_extra_tags = []
 
-        self.update_tab_stops()
+        self.update_tabs()
 
         self.tag_raise("io_hyperlink")
         self.tag_raise("stacktrace_hyperlink")
@@ -570,14 +481,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         self._update_visible_io(None)
 
     def _handle_toplevel_response(self, msg: ToplevelResponse) -> None:
-        was_scrolled_to_end = self.is_scrolled_to_end()
-        if "source_for_language_server" in msg:
-            self._context_lines_for_language_server += msg["source_for_language_server"].splitlines(
-                keepends=True
-            )
-            if not self._context_lines_for_language_server[-1].endswith("\n"):
-                self._context_lines_for_language_server[-1] += os.linesep
-
         if msg.get("error"):
             self._ensure_visible()
 
@@ -591,8 +494,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             if preceding.strip() and not preceding.endswith("\n"):
                 self._insert_text_directly("\n")
             self._insert_text_directly(welcome_text, ("welcome",))
-            if was_scrolled_to_end:
-                self.see("end")
+            self.see("end")
 
         self.mark_set("output_end", self.index("end-1c"))
         self._discard_old_content()
@@ -601,8 +503,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         self._io_cursor_offset = 0
         self._insert_prompt()
         self._try_submit_input()  # Trying to submit leftover code (eg. second magic command)
-        if was_scrolled_to_end:
-            self.see("end")
+        self.see("end")
 
         # import os
         # import psutil
@@ -630,7 +531,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                         self._queued_io_events.append((block, stream_name))
 
     def _update_visible_io(self, target_num_visible_chars):
-        was_scrolled_to_end = self.is_scrolled_to_end()
         current_num_visible_chars = sum(map(lambda x: len(x[0]), self._applied_io_events))
 
         if (
@@ -660,8 +560,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             current_num_visible_chars += len(data)
 
         self.mark_set("output_end", self.index("end-1c"))
-        if was_scrolled_to_end:
-            self.see("end")
+        self.see("end")
 
     def _apply_io_event(self, data, stream_name):
         if not data:
@@ -676,7 +575,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                 self._change_io_cursor_offset(-1)
             elif data == "\r":
                 self._change_io_cursor_offset("line")
-            elif data.startswith("\x1b]"):
+            elif data.startswith("\x1B]"):
                 self._handle_osc_sequence(data)
             elif data.endswith("D") or data.endswith("C"):
                 self._change_io_cursor_offset_csi(data)
@@ -1026,20 +925,17 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         if focused_view is not None:
             focused_view.focus()
 
-    def update_tab_stops(self):
-        # Code tabs
-        code_tab_chars = get_workbench().get_option("edit.tab_width")
-        code_font = tk.font.nametofont(self["font"])
-        code_tab_stops = compute_tab_stops(code_tab_chars, code_font, self.io_indent)
-        logger.debug("Using following tab stops for code: %r", code_tab_stops)
-        self.configure(tabs=tuple(code_tab_stops), tabstyle="wordprocessor")
+    def update_tabs(self):
+        tab_chars = 8
+        tab_pixels = tk.font.nametofont("IOFont").measure("n" * tab_chars)
 
-        # IO tabs
-        io_tab_chars = get_workbench().get_option("shell.io_tab_width")
-        io_font = tk.font.nametofont("IOFont")
-        io_tab_stops = compute_tab_stops(io_tab_chars, io_font, self.io_indent)
-        logger.debug("Using following tab stops for IO: %r", io_tab_stops)
-        self.tag_configure("io", tabs=io_tab_stops, tabstyle="wordprocessor")
+        offset = self.io_indent
+        tabs = [offset]
+        for _ in range(20):
+            offset += tab_pixels
+            tabs.append(offset)
+
+        self.tag_configure("io", tabs=tabs, tabstyle="wordprocessor")
 
     def restart(self, automatic: bool = False, was_running: bool = False):
         logger.info("BaseShellText.restart(%r)", automatic)
@@ -1066,11 +962,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         self.see("end")
         get_shell().set_osc_title("")
-
-        self._last_ls_uri = None
-        self._last_ls_version = None
-        self._context_lines_for_language_server = []
-        self._session_num_executed_lines_sent_to_ls = 0
 
     def intercept_insert(self, index, chars, tags=None, **kw):
         if tags is None:
@@ -1138,7 +1029,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._try_submit_input()
 
         elif get_runner().is_waiting_toplevel_command():
-            # Same with editing middle of command, but only if it's a single line command
+            # Same with editin middle of command, but only if it's a single line command
             whole_input = self.get("input_start", "end-1c")  # asking the whole input
             if "\n" not in whole_input and self._code_is_ready_for_submission(whole_input):
                 self.mark_set("insert", "end")  # move cursor to the end
@@ -1241,10 +1132,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def has_pending_input(self):
         pending = self.get("input_start", "end-1c")
-        return bool(self.get_pending_input())
-
-    def get_pending_input(self) -> str:
-        return self.get("input_start", "end-1c")
+        return bool(pending)
 
     def _try_submit_input(self):
         # see if there is already enough inputted text to submit
@@ -1325,7 +1213,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             return False
 
         # First check if it has unclosed parens, unclosed string or ending with : or \
-        parser = roughparse.RoughParser(self.indent_width, self.tab_width)
+        parser = roughparse.RoughParser(self.indent_width, self.tabwidth)
         parser.set_str(source.rstrip() + "\n")
         if parser.get_continuation_type() != roughparse.C_NONE or parser.is_block_opener():
             return False
@@ -1383,7 +1271,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                             if source == EDITOR_CONTENT_TOKEN:
                                 editor = get_workbench().get_editor_notebook().get_current_editor()
                                 assert editor
-                                self._last_main_file = editor.get_uri()
+                                self._last_main_file = editor.get_identifier()
                                 source = editor.get_content()
                         else:
                             source = None
@@ -1614,8 +1502,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def _show_user_exception(self, user_exception):
         for line, frame_id, *_ in user_exception["items"]:
-            # Translate error messages to French
-            line = translate_error(line)
             tags = ("io", "stderr")
             if frame_id is not None:
                 frame_tag = "frame_%d" % frame_id
@@ -1678,7 +1564,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         self.tag_add("inactive", "1.0", end_index)
 
-        # deactivate values
+        # inactivate values
         pos = end_index
         while True:
             rng = self.tag_prevrange("value", pos)
@@ -1729,160 +1615,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                 self.direct_delete(pos, end_pos)
             else:
                 logger.debug("end_pos %s, output_end %s", end_pos, self.index("output_end"))
-
-    def is_scrolled_to_end(self):
-        return bool(self.bbox("end-1c"))
-
-    def extract_last_execution_info(self, command_pattern: str) -> Optional[ExecutionInfo]:
-        search_start = "end"
-        while True:
-            command_index = self.search(
-                command_pattern, index=search_start, backwards=True, regexp=True
-            )
-            if not command_index:
-                return None
-
-            if "magic" in self.tag_names(command_index):
-                # yep, that's the command
-                break
-            else:
-                # false alarm, keep looking
-                search_start = command_index
-
-        command_line = self.get(command_index, f"{command_index} lineend")
-        line_number = int(float(command_index))
-
-        # assuming there is next line
-        io_start_index = f"{line_number + 1}.0"
-        if not "io" in self.tag_names(io_start_index):
-            logger.info("No IO on the next line after %r", command_line)
-            return None
-
-        io_start_index2, io_end_index = self.tag_nextrange("io", io_start_index)
-        if io_start_index2 != io_start_index:
-            logger.warning(
-                "IO start index %r vs %r. IO end index: %r",
-                io_start_index,
-                io_start_index2,
-                io_end_index,
-            )
-            return None
-
-        if io_start_index == io_end_index:
-            logger.warning("IO start index == IO end index (%r)", io_end_index)
-            return None
-
-        return ExecutionInfo(command_line, io_start_index, io_end_index)
-
-    def get_ls_uri(self) -> str:
-        proxy = get_runner().get_backend_proxy()
-        assert proxy is not None
-
-        path = os.path.join(proxy.get_cwd(), "__shell_virtual_file__.py")
-
-        return pathlib.Path(path).as_uri()
-
-    def send_changes_to_language_server(self) -> None:
-        ls_proxy = get_workbench().get_main_language_server_proxy()
-        if ls_proxy is None:
-            return
-
-        proxy = get_runner().get_backend_proxy()
-        if proxy is None:
-            self._context_lines_for_language_server_are_sent_to_ls = False
-            return
-
-        ls_uri = self.get_ls_uri()
-        if ls_uri != self._last_ls_uri:
-            if self._last_ls_uri is not None:
-                ls_proxy.notify_did_close_text_document(
-                    DidCloseTextDocumentParams(TextDocumentIdentifier(uri=self._last_ls_uri))
-                )
-                self._session_num_executed_lines_sent_to_ls = 0
-
-            version = 1
-            ls_proxy.notify_did_open_text_document(
-                DidOpenTextDocumentParams(
-                    textDocument=TextDocumentItem(
-                        version=version,
-                        uri=ls_uri,
-                        text="".join(self._context_lines_for_language_server),
-                        languageId="python",
-                    )
-                )
-            )
-            self._last_ls_version = version
-            self._last_ls_uri = ls_uri
-            self._session_num_executed_lines_sent_to_ls = len(
-                self._context_lines_for_language_server
-            )
-
-        if self._session_num_executed_lines_sent_to_ls < len(
-            self._context_lines_for_language_server
-        ):
-            self._replace_suffix_at_ls(
-                ls_proxy,
-                self._session_num_executed_lines_sent_to_ls,
-                "".join(
-                    self._context_lines_for_language_server[
-                        self._session_num_executed_lines_sent_to_ls :
-                    ]
-                ),
-            )
-            self._session_num_executed_lines_sent_to_ls = len(
-                self._context_lines_for_language_server
-            )
-
-        self._replace_suffix_at_ls(
-            ls_proxy, self._session_num_executed_lines_sent_to_ls, self.get_pending_input()
-        )
-
-    def _replace_suffix_at_ls(
-        self, ls_proxy: LanguageServerProxy, unchanged_line_count: int, suffix_text: str
-    ) -> None:
-        version = self._last_ls_version + 1
-        ls_proxy.notify_did_change_text_document(
-            DidChangeTextDocumentParams(
-                textDocument=VersionedTextDocumentIdentifier(
-                    version=version, uri=self.get_ls_uri()
-                ),
-                contentChanges=[
-                    RangedTextDocumentContentChangeEvent(
-                        range=Range(
-                            start=Position(line=unchanged_line_count, character=0),
-                            end=Position(
-                                line=unchanged_line_count + len(suffix_text.splitlines()),
-                                character=0,
-                            ),
-                        ),
-                        text=suffix_text,
-                    )
-                ],
-            )
-        )
-        self._last_ls_version = version
-
-    def get_current_line_ls_offset(self) -> int:
-        """
-        Returns:
-            Difference between current line position in ls_source and shell's current content
-        """
-        input_start_line = int(float(self.index("input_start")))
-        num_preceding_lines_in_shell = input_start_line - 1
-        num_preceding_lines_in_ls = len(self._context_lines_for_language_server)
-        return num_preceding_lines_in_ls - num_preceding_lines_in_shell
-
-    def get_current_column_ls_offset(self) -> int:
-        """
-        Returns:
-            a negative integer if the line starts with non-input characters (e.g. prompt)
-        """
-        input_start_line, input_start_col = map(int, self.index("input_start").split("."))
-        current_line = int(float(self.index("insert")))
-        if current_line == input_start_line:
-            return -input_start_col
-
-        return 0
 
 
 class ShellText(BaseShellText):
@@ -2253,7 +1985,7 @@ class PlotterCanvas(tk.Canvas):
             fill=self.colors[color % len(self.colors)],
             tags=("segment",),
             # arrow may be confusing
-            # and doesn't play nice with distinguishing between
+            # and doesn't play nice with distinguising between
             # scrollback view and fresh_range view
             # arrow="last",
             # arrowshape=(3,5,3)

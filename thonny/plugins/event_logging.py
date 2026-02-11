@@ -2,32 +2,18 @@ import os.path
 import time
 import tkinter as tk
 from datetime import datetime
-from logging import getLogger
-from tkinter import messagebox
-from typing import Dict, List, Optional, Tuple
 
-from thonny import get_shell, get_thonny_user_dir, get_workbench
-from thonny.common import InlineResponse, MessageFromBackend, ToplevelResponse
+from thonny import THONNY_USER_DIR, get_workbench
 from thonny.languages import tr
-from thonny.misc_utils import get_menu_char
 from thonny.shell import ShellView
+from thonny.ui_utils import asksaveasfilename
 from thonny.workbench import WorkbenchEvent
-
-logger = getLogger(__name__)
-
-TIMESTAMP_FORMAT = "%Y-%m-%d_%H-%M-%S"
-
-session_events = []
-session_start_time: Optional[time.struct_time] = None
-session_start_epoch_time: Optional[float] = None
-
-IDLE_SECONDS_FOR_SESSION_SPLIT = 15 * 60
 
 
 class EventLogger:
-    def __init__(self):
-        self._closing = False
-        self._last_event_epoch_time: Optional[float] = None
+    def __init__(self, filename):
+        self._filename = filename
+        self._events = []
 
         wb = get_workbench()
         wb.bind("WorkbenchClose", self._on_worbench_close, True)
@@ -50,24 +36,19 @@ class EventLogger:
         for sequence in [
             "UiCommandDispatched",
             "MagicCommand",
-            "Open",  # Event happens before the editor text gets updated
-            "Opened",
-            "Save",  # Event happens before save is attempted, user may cancel or saving may fail
-            "SaveAs",  # Event happens before save is attempted, user may cancel or saving may fail
-            "Saved",
+            "Open",
+            "Save",
+            "SaveAs",
             "NewFile",
             "EditorTextCreated",
-            # "EditorTextDestroyed", # Can't determine toplevel of a destroyed Text
+            "EditorTextDestroyed",
             # "ShellTextCreated", # Too bad, this event happens before event_logging is loaded
-            "InsertEditorToNotebook",
-            "RemoveEditorFromNotebook",
             "ShellCommand",
             "ShellInput",
             "ShowView",
             "HideView",
             "TextInsert",
             "TextDelete",
-            "ToplevelResponse",
         ]:
             self._bind_workbench(sequence)
 
@@ -75,18 +56,19 @@ class EventLogger:
         self._bind_workbench("<FocusOut>", True)
 
         ### log_user_event(KeyPressEvent(self, e.char, e.keysym, self.text.index(tk.INSERT)))
-        self._start_session()
+
+        # TODO: if event data includes an Editor, then look up also text id
 
     def _bind_workbench(self, sequence, only_workbench_widget=False):
         def handle(event):
             if not only_workbench_widget or event.widget == get_workbench():
-                self._consider_splitting_and_log_event(sequence, event)
+                self._log_event(sequence, event)
 
         get_workbench().bind(sequence, handle, True)
 
     def _bind_all(self, sequence):
         def handle(event):
-            self._consider_splitting_and_log_event(sequence, event)
+            self._log_event(sequence, event)
 
         tk._default_root.bind_all(sequence, handle, True)
 
@@ -133,251 +115,98 @@ class EventLogger:
 
         return data
 
-    def _consider_splitting_and_log_event(self, sequence, event):
-        now = time.time()
-        if (
-            self._last_event_epoch_time is not None
-            and now - self._last_event_epoch_time > IDLE_SECONDS_FOR_SESSION_SPLIT
-        ):
-            logger.info(
-                "Splitting because %r is more than %r seconds later than %r",
-                time.ctime(now),
-                IDLE_SECONDS_FOR_SESSION_SPLIT,
-                time.ctime(self._last_event_epoch_time),
-            )
-            self._split_session()
-
-        self._log_event(sequence, event)
-
     def _log_event(self, sequence, event):
-        if self._closing:
-            logger.info("Won't log %r because we are closing", sequence)
-            return
-
-        widget: Optional[tk.Widget]
-
-        event_time = datetime.now()
-        import json
-
-        widget_str = getattr(event, "widget", None) or getattr(event, "editor", None)
-        try:
-            widget = get_workbench().nametowidget(widget_str) if widget_str is not None else None
-        except Exception as e:
-            if "popdown" not in str(e):
-                logger.warning(
-                    "Could not extract widget %r from event %r", widget_str, event, exc_info=True
-                )
-            widget = None
-
-        if widget is None:
-            widget = getattr(event, "text_widget", None)
-
-        if widget is not None:
-            if not widget.winfo_exists():
-                # Probably the widget was deleted by an earlier event handler
-                logger.warning(
-                    "Got event %r from widget %r, but the widget does not exist'", sequence, widget
-                )
-                return
-
-            try:
-                if widget.winfo_toplevel() is not get_workbench():
-                    # logger.debug("Skipping non-workspace event %r", event)
-                    return
-            except tk.TclError:
-                logger.error("Could not get winfo_toplevel", exc_info=True)
-                return
-        elif not isinstance(event, (WorkbenchEvent, MessageFromBackend)):
-            logger.warning("Event without widget: %r", event)
-
         data = self._extract_interesting_data(event, sequence)
         data["sequence"] = sequence
-        data["time"] = event_time.isoformat()
+        data["time"] = datetime.now().isoformat()
         if len(data["time"]) == 19:
             # 0 fraction gets skipped, but reader assumes it
             data["time"] += ".0"
-        session_events.append(data)
-        json.dump(data, self._out_fp)
-        self._out_fp.write("\n")
+        self._events.append(data)
 
-        self._last_event_epoch_time = event_time.timestamp()
+    def _on_worbench_close(self, event=None):
+        import json
 
-    def _on_worbench_close(self, event):
-        self._consider_splitting_and_log_event("WorkbenchClose", event)
-        self._closing = True
-        self._close_session()
+        with open(self._filename, encoding="UTF-8", mode="w") as fp:
+            json.dump(self._events, fp, indent="    ")
 
-    def _start_session(self):
-        global session_start_time
-        now = datetime.now()
-        session_start_time = now.timetuple()
+        self._check_compress_logs()
 
-        self._file_path = os.path.join(
-            get_log_dir(), format_time_range(session_start_time, None) + ".jsonl"
+    def _check_compress_logs(self):
+        import zipfile
+
+        # if uncompressed logs have grown over 10MB,
+        # compress these into new zipfile
+
+        log_dir = _get_log_dir()
+        total_size = 0
+        uncompressed_files = []
+        for item in os.listdir(log_dir):
+            if item.endswith(".txt"):
+                full_name = os.path.join(log_dir, item)
+                total_size += os.stat(full_name).st_size
+                uncompressed_files.append((item, full_name))
+
+        if total_size > 10 * 1024 * 1024:
+            zip_filename = _generate_timestamp_file_name("zip")
+            with zipfile.ZipFile(zip_filename, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
+                for item, full_name in uncompressed_files:
+                    zipf.write(full_name, arcname=item)
+
+            for _, full_name in uncompressed_files:
+                os.remove(full_name)
+
+
+def _generate_timestamp_file_name(extension):
+    # generate log filename
+    folder = _get_log_dir()
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    for i in range(100):
+        filename = os.path.join(
+            folder, time.strftime("%Y-%m-%d_%H-%M-%S_{}.{}".format(i, extension))
         )
-        self._out_fp = open(self._file_path, mode="w", encoding="utf-8", buffering=1)
-        logger.info("Starting logging user events into %r", self._file_path)
+        if not os.path.exists(filename):
+            return filename
 
-    def _close_session(self):
-        # save the file, compress it and remove the uncompressed copy
-        logger.info("Closing event log")
-        self._out_fp.close()
-        out_file_path = os.path.join(
-            get_log_dir(), format_time_range(session_start_time, time.localtime()) + ".jsonl.gz"
-        )
-        import gzip
-
-        logger.info("Events will be saved to %r", out_file_path)
-        with gzip.open(out_file_path, mode="wb") as out_fp:
-            with open(self._file_path, mode="rb") as in_fp:
-                out_fp.write(in_fp.read())
-
-        os.remove(self._file_path)
-        session_events.clear()
-
-    def _split_session(self):
-        self._close_session()
-        self._start_session()
-
-        texts = [
-            editor.get_text_widget()
-            for editor in get_workbench().get_editor_notebook().get_all_editors()
-        ]
-        texts.insert(0, get_shell().text)
-
-        for text in texts:
-            self._log_event(
-                "TextInsert",
-                WorkbenchEvent(
-                    sequence="TextInsert",
-                    index="1.0",
-                    text=text.get("1.0", "end-1c"),
-                    tags=(),
-                    text_widget=text,
-                    trivial_for_coloring=False,
-                    trivial_for_parens=False,
-                ),
-            )
+    raise RuntimeError()
 
 
-def get_log_dir():
-    return os.path.join(get_thonny_user_dir(), "user_logs")
+def _get_log_dir():
+    return os.path.join(THONNY_USER_DIR, "user_logs")
 
 
 def export():
-    messagebox.showinfo(
-        "Info",
-        "For exporting usage logs, please select 'Tools => Open Replayer...'\n"
-        "and click on the " + get_menu_char() + " button in the upper-right corner of the window",
+    import zipfile
+
+    filename = asksaveasfilename(
+        filetypes=[("Zip-files", ".zip"), ("all files", ".*")],
+        defaultextension=".zip",
+        initialdir=get_workbench().get_local_cwd(),
+        initialfile=time.strftime("ThonnyUsageLogs_%Y-%m-%d.zip"),
+        parent=get_workbench(),
     )
 
+    if not filename:
+        return
 
-def format_time_range(
-    start_time: time.struct_time, end_time: Optional[time.struct_time] = None
-) -> str:
-    start_str = time.strftime(TIMESTAMP_FORMAT, start_time)
-    if end_time is not None:
-        end_str = time.strftime(TIMESTAMP_FORMAT, end_time)
-    else:
-        end_str = "unknown"
-    return start_str + "__" + end_str
+    log_dir = _get_log_dir()
 
-
-def parse_time_range(s: str) -> Tuple[time.struct_time, Optional[time.struct_time]]:
-    parts = s.split("__")
-    assert len(parts) == 2
-    start_time = time.strptime(parts[0], TIMESTAMP_FORMAT)
-    if parts[1] == "unknown":
-        end_time = None
-    else:
-        end_time = time.strptime(parts[1], TIMESTAMP_FORMAT)
-
-    return start_time, end_time
-
-
-def parse_file_name(name: str) -> Tuple[time.struct_time, Optional[time.struct_time]]:
-    parts = name.split(".")
-    return parse_time_range(parts[0])
-
-
-def save_events_to_file(events: List[Dict], path: str) -> None:
-    import json
-
-    data = json.dumps(events, indent=4)
-    if path.lower().endswith(".zip"):
-        import zipfile
-
-        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
-            zipf.writestr(os.path.basename(path)[:-4] + ".txt", data=data)
-    elif path.lower().endswith(".txt") or path.lower().endswith(".json"):
-        # import/export Json format
-        with open(path, mode="wt", encoding="utf-8") as fp:
-            fp.write(data)
-    else:
-        raise EventsInputOutputFileError("Unsupported output format")
-
-
-def load_events_from_file(path: str) -> List[Dict]:
-    import json
-
-    if path.lower().endswith(".zip"):
-        import zipfile
-
-        with zipfile.ZipFile(path, "r") as zipf:
-            names = zipf.namelist()
-            if len(names) > 1:
-                raise EventsInputOutputFileError(
-                    "The zip contains several files.\nPlease extract the files and load one of them!"
-                )
-            name = names[0]
-            data = zipf.read(name)
-
-            if name.lower().endswith(".jsonl"):
-                return [json.loads(line) for line in data.decode("utf-8").splitlines()]
-            elif name.lower().endswith(".json") or name.lower().endswith(".txt"):
-                return json.loads(data.decode("utf-8"))
-            else:
-                raise EventsInputOutputFileError(f"Don't know how to open {name}")
-
-    elif path.lower().endswith(".txt") or path.lower().endswith(".json"):
-        # import/export JSON format
-        with open(path, encoding="utf-8") as fp:
-            return json.load(fp)
-    else:
-        # internal, JSON lines format
-        if path.lower().endswith(".jsonl.gz"):
-            import gzip
-
-            open_fun = gzip.open
-        elif path.lower().endswith(".jsonl"):
-            # internal format may remain uncompressed in case of crashes
-            open_fun = open
-
-        else:
-            raise EventsInputOutputFileError("Can't determine file format")
-
-        result = []
-        with open_fun(path, mode="rt", encoding="utf-8") as fp:
-            for line in fp:
-                result.append(json.loads(line))
-
-        return result
-
-
-class EventsInputOutputFileError(ValueError):
-    pass
+    with zipfile.ZipFile(filename, "w", compression=zipfile.ZIP_DEFLATED) as zipf:
+        for item in os.listdir(log_dir):
+            if item.endswith(".txt") or item.endswith(".zip"):
+                zipf.write(os.path.join(log_dir, item), arcname=item)
 
 
 def load_plugin() -> None:
-    if not os.path.exists(get_log_dir()):
-        os.makedirs(get_log_dir())
-
     get_workbench().set_default("general.event_logging", False)
 
     if get_workbench().get_option("general.event_logging"):
         get_workbench().add_command(
-            "export_usage_logs", "tools", tr("Export usage logs..."), export, group=105
+            "export_usage_logs", "tools", tr("Export usage logs..."), export, group=110
         )
 
+        filename = _generate_timestamp_file_name("txt")
         # create logger
-        EventLogger()
+        EventLogger(filename)

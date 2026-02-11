@@ -12,9 +12,8 @@ from typing import Dict, Union  # @UnusedImport
 
 from thonny import get_workbench, roughparse, tktextext, ui_utils
 from thonny.common import TextRange
-from thonny.languages import tr
 from thonny.tktextext import EnhancedText
-from thonny.ui_utils import EnhancedTextWithLogging, ask_string, compute_tab_stops
+from thonny.ui_utils import EnhancedTextWithLogging, ask_string, scrollbar_style
 
 _syntax_options = {}  # type: Dict[str, Union[str, int]]
 # BREAKPOINT_SYMBOL = "•" # Bullet
@@ -35,12 +34,10 @@ logger = getLogger(__name__)
 
 
 class SyntaxText(EnhancedText):
-    def __init__(self, master, indent_width: int = 4, tab_width: int = 4, cnf={}, **kw):
+    def __init__(self, master=None, cnf={}, **kw):
         self.file_type = "python"
         self._syntax_options = {}
-        super().__init__(
-            master=master, indent_width=indent_width, tab_width=tab_width, cnf=cnf, **kw
-        )
+        super().__init__(master=master, cnf=cnf, **kw)
         get_workbench().bind("SyntaxThemeChanged", self._reload_syntax_options, True)
         self._reload_syntax_options()
 
@@ -110,22 +107,19 @@ class SyntaxText(EnhancedText):
     def is_pythonlike_text(self):
         return self.file_type == "pythonlike"
 
-    def update_tab_stops(self):
-        tab_chars = get_workbench().get_option("edit.tab_width")
-        font = tk.font.nametofont(self["font"])
-        self.configure(tabs=tuple(compute_tab_stops(tab_chars, font)), tabstyle="wordprocessor")
+    def update_tabs(self):
+        tab_chars = 4
+        tab_pixels = tk.font.nametofont(self["font"]).measure("n" * tab_chars)
+        tabs = [tab_pixels]
+        self.configure(tabs=tabs, tabstyle="wordprocessor")
 
 
 class CodeViewText(EnhancedTextWithLogging, SyntaxText):
     """Provides opportunities for monkey-patching by plugins"""
 
     def __init__(self, master=None, cnf={}, **kw):
-        indent_width = get_workbench().get_option("edit.indent_width")
-        tab_width = get_workbench().get_option("edit.tab_width")
         super().__init__(
             master=master,
-            indent_width=indent_width,
-            tab_width=tab_width,
             tag_current_line=get_workbench().get_option("view.highlight_current_line"),
             cnf=cnf,
             **kw,
@@ -161,8 +155,9 @@ class CodeView(tktextext.EnhancedTextFrame):
             master,
             undo=True,
             wrap=tk.NONE,
+            vertical_scrollbar_style=scrollbar_style("Vertical"),
+            horizontal_scrollbar_style=scrollbar_style("Horizontal"),
             horizontal_scrollbar_class=ui_utils.AutoScrollbar,
-            vertical_scrollbar_rowspan=2,
             **frame_args,
         )
 
@@ -187,11 +182,8 @@ class CodeView(tktextext.EnhancedTextFrame):
         self._gutter.tag_configure("active", font="BoldEditorFont")
         self._gutter.tag_raise("spacer")
 
-    def get_content(self, up_to_end=False):
-        if not up_to_end:
-            return self.text.get("1.0", "end-1c")  # -1c because Text always adds a newline itself
-        else:
-            return self.text.get("1.0", "end")
+    def get_content(self):
+        return self.text.get("1.0", "end-1c")  # -1c because Text always adds a newline itself
 
     def detect_encoding(self, data):
         enc = self.detect_encoding_without_check(data)
@@ -252,8 +244,8 @@ class CodeView(tktextext.EnhancedTextFrame):
                 pass
 
             encoding = ask_string(
-                tr("Bad encoding"),
-                tr("Could not read as %s text.\nYou could try another encoding") % encoding,
+                "Bad encoding",
+                "Could not read as %s text.\nYou could try another encoding" % encoding,
                 initial_value=encoding,
                 options=get_proposed_encodings(),
                 master=self.winfo_toplevel(),
@@ -483,7 +475,7 @@ def perform_python_return(text: EnhancedText, event):
         # adjust indentation for continuations and block
         # open/close first need to find the last stmt
         lno = tktextext.index2line(text.index("insert"))
-        y = roughparse.RoughParser(text.indent_width, text.tab_width)
+        y = roughparse.RoughParser(text.indent_width, text.tabwidth)
 
         for context in roughparse.NUM_CONTEXT_LINES:
             startat = max(lno - context, 1)
@@ -540,6 +532,7 @@ def perform_python_return(text: EnhancedText, event):
     finally:
         text.see("insert")
         text.event_generate("<<NewLine>>")
+        return "break"
 
 
 def perform_simple_return(text: EnhancedText, event):
@@ -574,6 +567,7 @@ def perform_simple_return(text: EnhancedText, event):
     finally:
         text.see("insert")
         text.event_generate("<<NewLine>>")
+        return "break"
 
 
 class BinaryFileException(RuntimeError):

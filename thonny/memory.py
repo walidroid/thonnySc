@@ -24,14 +24,8 @@ def parse_object_id(object_id_repr):
 
 
 class MemoryFrame(TreeFrame):
-    def __init__(self, master, columns, show_statusbar=False, consider_heading_stripe=True):
-        TreeFrame.__init__(
-            self,
-            master,
-            columns,
-            show_statusbar=show_statusbar,
-            consider_heading_stripe=consider_heading_stripe,
-        )
+    def __init__(self, master, columns, show_statusbar=False):
+        TreeFrame.__init__(self, master, columns, show_statusbar=show_statusbar)
 
         font = tk_font.nametofont("TkDefaultFont").copy()
         font.configure(underline=True)
@@ -59,10 +53,8 @@ class MemoryFrame(TreeFrame):
 
 
 class VariablesFrame(MemoryFrame):
-    def __init__(self, master, consider_heading_stripe=True):
-        MemoryFrame.__init__(
-            self, master, ("name", "id", "value"), consider_heading_stripe=consider_heading_stripe
-        )
+    def __init__(self, master):
+        MemoryFrame.__init__(self, master, ("name", "id", "value"))
 
         self.tree.column("name", width=120, anchor=tk.W, stretch=False)
         self.tree.column("id", width=450, anchor=tk.W, stretch=True)
@@ -112,18 +104,19 @@ class VariablesFrame(MemoryFrame):
                 node_id = self.tree.insert("", "end", tags=("group_title",))
                 self.tree.set(node_id, "name", group_title)
 
-            for name in sorted(variables.keys(), key=lambda x: (x.startswith("_"), x)):
-                node_id = self.tree.insert("", "end", tags="item")
-                self.tree.set(node_id, "name", name)
-                if isinstance(variables[name], ValueInfo):
-                    description = variables[name].repr
-                    id_str = variables[name].id
-                else:
-                    description = variables[name]
-                    id_str = None
+            for name in sorted(variables.keys()):
+                if not name.startswith("__"):
+                    node_id = self.tree.insert("", "end", tags="item")
+                    self.tree.set(node_id, "name", name)
+                    if isinstance(variables[name], ValueInfo):
+                        description = variables[name].repr
+                        id_str = variables[name].id
+                    else:
+                        description = variables[name]
+                        id_str = None
 
-                self.tree.set(node_id, "id", format_object_id(id_str))
-                self.tree.set(node_id, "value", description)
+                    self.tree.set(node_id, "id", format_object_id(id_str))
+                    self.tree.set(node_id, "value", description)
 
     def on_select(self, event):
         self.show_selected_object_info()
