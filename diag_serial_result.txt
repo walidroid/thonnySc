@@ -1,7 +1,0 @@
-Python: 3.13.1 (tags/v3.13.1:0671451, Dec  3 2024, 19:06:28) [MSC v.1942 64 bit (AMD64)]
-Executable: C:\Users\Admin\AppData\Local\Programs\ThonnySc\Python\python.exe
-sys.path: ['C:\\Users\\Admin\\AppData\\Local\\Programs\\ThonnySc\\Python\\python313.zip', 'C:\\Users\\Admin\\AppData\\Local\\Programs\\ThonnySc\\Python', 'C:\\Users\\Admin\\AppData\\Local\\Programs\\ThonnySc\\Python\\Lib\\site-packages']
-
-OK: import serial
-File: C:\Users\Admin\AppData\Local\Programs\ThonnySc\Python\Lib\site-packages\serial\__init__.py
-OK: from serial.tools.list_ports import comports
