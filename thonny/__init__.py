@@ -47,7 +47,7 @@ def report_time(label: str) -> None:
 report_time("After defining report_time")
 
 
-SINGLE_INSTANCE_DEFAULT = True
+SINGLE_INSTANCE_DEFAULT = False
 BACKEND_LOG_MARKER = "Thonny's backend.log"
 
 
@@ -461,12 +461,7 @@ def _configure_logging(log_file, console_level=None):
         logger.propagate = False  # otherwise it will be also reported by IDE-s root logger
         logger.addHandler(file_handler)
 
-    if console_level is not None:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(logFormatter)
-        console_handler.setLevel(console_level)
-        for logger in [main_logger, contrib_logger]:
-            logger.addHandler(console_handler)
+        pass # skip console logging to avoid confusing the frontend handshake
 
     # Log most important info as soon as possible
     main_logger.info("Thonny version: %s", get_version())

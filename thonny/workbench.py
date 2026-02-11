@@ -686,7 +686,7 @@ class Workbench(tk.Tk):
                 caption=tr("Zoom"),
                 handler=self._toggle_font_size,
                 image="zoom",
-                include_in_toolbar=True,
+                include_in_toolbar=False,
             )
 
             self.add_command(
@@ -696,7 +696,7 @@ class Workbench(tk.Tk):
                 self._on_close,
                 image="quit",
                 caption=tr("Quit"),
-                include_in_toolbar=True,
+                include_in_toolbar=False,
                 group=101,
             )
 
@@ -707,7 +707,7 @@ class Workbench(tk.Tk):
             self._support_ukraine,
             image="Ukraine",
             caption=tr("Support"),
-            include_in_toolbar=True,
+            include_in_toolbar=False,
             group=101,
         )
 

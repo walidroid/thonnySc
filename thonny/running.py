@@ -181,7 +181,7 @@ class Runner:
             tester=self.cmd_run_current_script_enabled,
             group=10,
             image="run-current-script",
-            include_in_toolbar=not (get_workbench().in_simple_mode() and debugger_available),
+            include_in_toolbar=True,
             show_extra_sequences=True,
         )
 

@@ -1305,7 +1305,7 @@ def load_plugin() -> None:
         group=10,
         image="run-current-script",
         include_in_menu=False,
-        include_in_toolbar=get_workbench().in_simple_mode(),
+        include_in_toolbar=False,
         alternative_caption=RESUME_COMMAND_CAPTION,
     )
 
@@ -1319,7 +1319,7 @@ def load_plugin() -> None:
         group=10,
         image="debug-current-script",
         include_in_menu=False,
-        include_in_toolbar=True,
+        include_in_toolbar=False,
     )
 
     get_workbench().add_command(
@@ -1355,7 +1355,7 @@ def load_plugin() -> None:
         default_sequence="<F6>",
         group=30,
         image="step-over",
-        include_in_toolbar=True,
+        include_in_toolbar=False,
     )
 
     get_workbench().add_command(
@@ -1368,7 +1368,7 @@ def load_plugin() -> None:
         default_sequence="<F7>",
         group=30,
         image="step-into",
-        include_in_toolbar=True,
+        include_in_toolbar=False,
     )
 
     get_workbench().add_command(
@@ -1380,7 +1380,7 @@ def load_plugin() -> None:
         tester=lambda: _debugger_command_enabled("step_out"),
         group=30,
         image="step-out",
-        include_in_toolbar=True,
+        include_in_toolbar=False,
     )
 
     get_workbench().add_command(
@@ -1393,7 +1393,7 @@ def load_plugin() -> None:
         default_sequence="<F8>",
         group=30,
         image="resume",
-        include_in_toolbar=not get_workbench().in_simple_mode(),
+        include_in_toolbar=False,
     )
 
     get_workbench().add_command(
