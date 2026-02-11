@@ -21,8 +21,7 @@ def get_vendored_libs_dir() -> str:
 
 
 # Required both for front- and back-end
-sys.path.insert(
-    1,
+sys.path.append(
     get_vendored_libs_dir(),
 )
 
