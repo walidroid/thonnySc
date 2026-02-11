@@ -1,19 +1,19 @@
 import platform
 
-from thonny import get_workbench
-from thonny.languages import tr
-from thonny.plugins.micropython.mp_front import (
-    GenericBareMetalMicroPythonConfigPage,
-    GenericBareMetalMicroPythonProxy,
-    LocalMicroPythonConfigPage,
-    LocalMicroPythonProxy,
-    SshMicroPythonConfigPage,
-    SshMicroPythonProxy,
-    add_micropython_backend,
-)
-
 
 def load_plugin():
+    from thonny import get_workbench
+    from thonny.languages import tr
+    from thonny.plugins.micropython.mp_front import (
+        GenericBareMetalMicroPythonConfigPage,
+        GenericBareMetalMicroPythonProxy,
+        LocalMicroPythonConfigPage,
+        LocalMicroPythonProxy,
+        SshMicroPythonConfigPage,
+        SshMicroPythonProxy,
+        add_micropython_backend,
+    )
+
     add_micropython_backend(
         "GenericMicroPython",
         GenericBareMetalMicroPythonProxy,
@@ -54,3 +54,4 @@ def load_plugin():
     get_workbench().set_default("SshMicroPython.make_uploaded_shebang_scripts_executable", True)
 
     get_workbench().set_default("esptool.show_advanced_options", False)
+

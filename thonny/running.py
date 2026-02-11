@@ -1327,12 +1327,25 @@ class SubprocessProxy(BackendProxy, ABC):
 
             self._send_initial_input()
         else:
+            # Wait a moment for the process to finish so we can capture its error output
+            import time
+            time.sleep(0.5)
 
             return_code = self._proc.poll()
-            if return_code is not None:
-                err = self._proc.stderr.read()
-                if err:
-                    get_shell().print_error(err)
+            err = ""
+            try:
+                if return_code is not None:
+                    err = self._proc.stderr.read()
+                else:
+                    # Process still running but didn't send ACK - try to read available stderr
+                    self._proc.kill()
+                    self._proc.wait(timeout=2)
+                    err = self._proc.stderr.read()
+            except Exception:
+                pass
+
+            if err:
+                get_shell().print_error(err)
 
             raise RuntimeError(
                 f"Could not start back-end process, got {stdout_line!r} instead of {PROCESS_ACK!r}"

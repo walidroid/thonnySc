@@ -53,13 +53,31 @@ try:
         unix_dirname_basename,
     )
 except ImportError:
-    EOT = b'\x04'
-    FIRST_RAW_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
-    NORMAL_PROMPT = b">>> "
-    STAT_KIND_INDEX = 0
-    STAT_MTIME_INDEX = 8
-    STAT_SIZE_INDEX = 6
-    ProperTargetManager = None
+    try:
+        from minny.bare_metal import (
+            EOT,
+            FIRST_RAW_PROMPT,
+            NORMAL_PROMPT,
+            BareMetalAdapter as ProperTargetManager
+        )
+        # Constants that might be different or local
+        STAT_KIND_INDEX = 0
+        STAT_MTIME_INDEX = 8
+        STAT_SIZE_INDEX = 6
+        
+        def unix_dirname_basename(path):
+            if "/" in path:
+                return path.rsplit("/", 1)
+            return "", path
+            
+    except ImportError:
+        EOT = b'\x04'
+        FIRST_RAW_PROMPT = b"raw REPL; CTRL-B to exit\r\n>"
+        NORMAL_PROMPT = b">>> "
+        STAT_KIND_INDEX = 0
+        STAT_MTIME_INDEX = 8
+        STAT_SIZE_INDEX = 6
+        ProperTargetManager = None
     def unix_dirname_basename(path):
         return os.path.split(path)
 

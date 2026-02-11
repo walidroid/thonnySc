@@ -11,15 +11,99 @@ try:
     from minny.target import ManagementError
     MINNY_AVAILABLE = True
 except ImportError:
-    BareMetalTargetManager = None
-    MicroPythonConnection = None
-    ManagementError = Exception
-    MINNY_AVAILABLE = False
+    try:
+        # Compatibility layer for different minny version
+        from minny.bare_metal import SerialPortAdapter, BareMetalAdapter
+        from minny.connection import MicroPythonConnection
+        from minny.common import ManagementError
+        
+        class BareMetalTargetManager(SerialPortAdapter):
+            def __init__(self, connection, clean, **kwargs):
+                self._clean = clean
+                self._cwd = kwargs.get("cwd")
+                super().__init__(
+                    connection,
+                    submit_mode=kwargs.get("submit_mode"),
+                    write_block_size=kwargs.get("write_block_size"),
+                    write_block_delay=kwargs.get("write_block_delay"),
+                )
+
+            def launch_main_program(self):
+                # Send soft reboot command (CTRL-D)
+                try:
+                    self._write(b"\x04")
+                except:
+                    pass
+            
+            def get_cwd(self):
+                if not self._cwd:
+                    try:
+                        self._cwd = self._evaluate("__minny_helper.os.getcwd()")
+                    except:
+                        self._cwd = "/"
+                return self._cwd
+                
+            def cd(self, path):
+                self._evaluate("__minny_helper.os.chdir(%r)" % path)
+                self._cwd = self._evaluate("__minny_helper.os.getcwd()")
+
+            def mkdir(self, path):
+                self._evaluate("__minny_helper.os.mkdir(%r)" % path)
+
+            def rmdir(self, path):
+                self._evaluate("__minny_helper.os.rmdir(%r)" % path)
+
+            def _get_interpreter_kind(self):
+                return "MicroPython"
+
+            def _using_simplified_micropython(self):
+                # Assume standard MicroPython for now
+                return False
+
+            def _prepare_disconnect(self):
+                pass
+            
+            def _get_stat_mode(self, path):
+                stat = self.try_get_stat(path)
+                if stat:
+                    return stat.st_mode
+                return None
+            
+            def _mkdir(self, path):
+                self.mkdir_in_existing_parent_exists_ok(path)
+
+            def read_file_ex(self, source_path, target_fp, callback, interrupt_event):
+                # Basic implementation ignoring callback progress for now
+                try:
+                    data = self.read_file(source_path)
+                    target_fp.write(data)
+                    if callback:
+                        callback(len(data), len(data))
+                except Exception as e:
+                    # Map errors
+                    raise ManagementError("Read error", "read", str(e), "") from e
+
+            def write_file_ex(self, target_path, source_fp, file_size, callback):
+                # Basic implementation ignoring callback progress for now
+                try:
+                    data = source_fp.read()
+                    self.write_file_in_existing_dir(target_path, data)
+                    if callback:
+                        callback(len(data), len(data))
+                except Exception as e:
+                    raise ManagementError("Write error", "write", str(e), "") from e
+
+        MINNY_AVAILABLE = True
+    except ImportError:
+        BareMetalTargetManager = None
+        MicroPythonConnection = None
+        ManagementError = Exception
+        MINNY_AVAILABLE = False
 
 # make sure thonny folder is in sys.path (relevant in dev)
 thonny_container = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 if thonny_container not in sys.path:
-    sys.path.insert(0, thonny_container)
+    sys.path.append(thonny_container)
 
 import thonny
 from thonny.backend import UploadDownloadMixin, convert_newlines_if_has_shebang
