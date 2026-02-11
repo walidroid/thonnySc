@@ -795,14 +795,14 @@ class EditorNotebook(ui_utils.ClosableNotebook):
 
         if len(filenames) > 0:
             for filename in filenames:
-                if os.path.exists(filename):
+                if os.path.isfile(filename):
                     self.show_file(filename)
 
             cur_file = get_workbench().get_option("file.current_file")
             # choose correct active file
             if len(cmd_line_filenames) > 0:
                 self.show_file(cmd_line_filenames[0])
-            elif cur_file and os.path.exists(cur_file):
+            elif cur_file and os.path.isfile(cur_file):
                 self.show_file(cur_file)
             else:
                 self._cmd_new_file()
