@@ -244,7 +244,12 @@ if (Test-Path "thonnycontrib\thonny_friendly") {
 
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
-pyinstaller thonny.spec
+
+# Install PyInstaller in the local environment ensuring visibility of dependencies
+& ".\Python\python.exe" -m pip install pyinstaller --no-warn-script-location
+
+# Run PyInstaller using the local python
+& ".\Python\python.exe" -m PyInstaller thonny.spec
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "PyInstaller build failed!" -ForegroundColor Red
