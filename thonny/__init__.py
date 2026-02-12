@@ -47,7 +47,7 @@ def report_time(label: str) -> None:
 report_time("After defining report_time")
 
 
-SINGLE_INSTANCE_DEFAULT = False
+SINGLE_INSTANCE_DEFAULT = True
 BACKEND_LOG_MARKER = "Thonny's backend.log"
 
 
