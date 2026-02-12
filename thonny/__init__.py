@@ -242,6 +242,17 @@ def _get_macos_app_path() -> Optional[str]:
 def launch():
     import runpy
 
+    # If frozen (PyInstaller) and called with a launcher script, run it directly
+    # instead of going through the GUI launch path. This handles the case where
+    # Thonny.exe is used as the Python interpreter for backend subprocesses.
+    if getattr(sys, 'frozen', False):
+        for i, arg in enumerate(sys.argv[1:], 1):
+            if arg.endswith("cp_launcher.py") or arg.endswith("mp_launcher.py"):
+                launcher_path = arg
+                sys.argv = sys.argv[i:]  # shift argv so script sees correct args
+                runpy.run_path(launcher_path, run_name="__main__")
+                return 0
+
     if sys.executable.endswith("thonny.exe"):
         # otherwise some library may try to run its subprocess with thonny.exe
         # NB! Must be pythonw.exe not python.exe, otherwise Runner thinks console

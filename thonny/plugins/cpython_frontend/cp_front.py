@@ -467,6 +467,14 @@ def _get_interpreters():
 
 
 def get_default_cpython_executable_for_backend() -> str:
+    # If running from PyInstaller bundle, use bundled Python instead of frozen exe
+    if getattr(sys, 'frozen', False):
+        bundled_python = os.path.join(
+            os.path.dirname(sys.executable), "Python", "python.exe"
+        )
+        if os.path.exists(bundled_python):
+            return bundled_python
+
     if is_private_python(sys.executable) and is_virtual_executable(sys.executable):
         # Private venv. Make an exception and use base Python for default backend.
         default_path = get_base_executable()
