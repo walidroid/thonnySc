@@ -174,6 +174,24 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: minny installation failed - Backend may not work" -ForegroundColor Yellow
 }
 
+# Step 2.6.5: Install jedi for code completion
+Write-Host "`nInstalling jedi for code completion..."
+& ".\Python\python.exe" -m pip install "jedi>=0.19.0" --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "jedi installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $jediCheck = & ".\Python\python.exe" -c "import jedi; print('OK')" 2>$null
+    if ($jediCheck -eq "OK") {
+        Write-Host "jedi verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: jedi verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: jedi installation failed - Code completion may not work" -ForegroundColor Yellow
+}
+
 # Step 2.6.4: Install thonny-autosave and missing stdlib dependencies
 Write-Host "`nInstalling thonny-autosave and dependencies..."
 
@@ -261,6 +279,12 @@ if (Test-Path "local_plugins\thonnycontrib") {
     Write-Host "Copied local plugins to $dest" -ForegroundColor Green
 } else {
     Write-Host "Warning: local_plugins\thonnycontrib not found" -ForegroundColor Yellow
+}
+
+# Post-Build: Copy launch_thonny.py to dist (for Tcl/Tk auto-detection)
+if (Test-Path "launch_thonny.py") {
+    Copy-Item "launch_thonny.py" -Destination "dist\Thonny\launch_thonny.py" -Force
+    Write-Host "Copied launch_thonny.py to dist" -ForegroundColor Green
 }
 
 # Step 4: Build Installer

@@ -150,6 +150,25 @@ jobs:
           Write-Host "⚠ Warning: minny installation failed"
         }
         
+    - name: Install jedi for Code Completion
+      run: |
+        Write-Host "Installing jedi for code completion..."
+        & ".\\Python\\python.exe" -m pip install "jedi>=0.19.0" --no-warn-script-location
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ jedi installed successfully"
+          
+          # Verify installation
+          $jediCheck = & ".\\Python\\python.exe" -c "import jedi; print('OK')" 2>$null
+          if ($jediCheck -eq "OK") {
+            Write-Host "✓ jedi verification successful"
+          } else {
+            Write-Host "⚠ Warning: jedi verification failed"
+          }
+        } else {
+          Write-Host "⚠ Warning: jedi installation failed"
+        }
+        
     - name: Ensure sched.py exists
       run: |
         # Autosave plugin needs sched.py which is missing in embeddable python

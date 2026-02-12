@@ -36,6 +36,8 @@ for package in packages_with_metadata:
 # Collect all submodules
 friendly_hiddenimports = collect_submodules('friendly_traceback')
 thonny_hiddenimports = collect_submodules('thonny')
+jedi_hiddenimports = collect_submodules('jedi')
+parso_hiddenimports = collect_submodules('parso')
 
 a = Analysis(
     ['thonny/__main__.py'],
@@ -60,6 +62,9 @@ a = Analysis(
         'thonnycontrib.thonny_autosave',
         'thonnycontrib.thonny_quick_switch',
         'pkg_resources.py2_warn',
+        # Code completion
+        'jedi',
+        'parso',
         # ESP32/ESP8266 MicroPython support
         'esptool',
         'esptool.cmds',
@@ -69,7 +74,7 @@ a = Analysis(
         'serial.tools',
         'serial.tools.list_ports',
         'serial.tools.list_ports_windows',
-    ] + friendly_hiddenimports + thonny_hiddenimports,
+    ] + friendly_hiddenimports + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
     runtime_hooks=[],

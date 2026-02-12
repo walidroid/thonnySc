@@ -44,7 +44,7 @@ jobs:
       - name: Validate Bundled Dependencies
         shell: powershell
         run: |
-          $mods = @('numpy','esptool','serial','friendly_traceback','asttokens','packaging','minny','pylint','mypy','wheel','send2trash')
+          $mods = @('numpy','esptool','serial','friendly_traceback','asttokens','packaging','minny','pylint','mypy','wheel','send2trash','jedi')
           foreach ($m in $mods) {
             & ".\Python\python.exe" -c "import $m; print('$m OK')" | Out-Host
           }

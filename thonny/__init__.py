@@ -326,6 +326,12 @@ def prepare_thonny_user_dir():
 
 
 def _should_delegate():
+    # Don't delegate if running as a backend subprocess
+    # (sys.argv will contain cp_launcher.py or similar backend scripts)
+    for arg in sys.argv[1:]:
+        if arg.endswith("cp_launcher.py") or arg.endswith("mp_launcher.py"):
+            return False
+
     if not os.path.exists(get_ipc_file_path()):
         # no previous instance
         return False
