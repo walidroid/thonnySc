@@ -43,37 +43,32 @@ jobs:
           python -m py_compile launch_thonny.py
       
       - name: Validate portable fixes
+        shell: bash
         run: |
-          python -c "
-import sys
-import os
-sys.path.insert(0, '.')
-
-# Check SINGLE_INSTANCE_DEFAULT is enabled
-with open('thonny/__init__.py', 'r') as f:
-    content = f.read()
-    assert 'SINGLE_INSTANCE_DEFAULT = True' in content, 'Single instance mode not enabled'
-    print('✓ Single instance mode enabled')
-
-# Check editors.py uses isfile() instead of exists()
-with open('thonny/editors.py', 'r') as f:
-    content = f.read()
-    # Look for the fixed line
-    assert 'os.path.isfile(filename)' in content, 'File check not using isfile()'
-    print('✓ File loading uses isfile() check')
-
-print('✓ All portable fixes validated')
-"
+          python - <<'PYEOF'
+          import sys, os
+          sys.path.insert(0, '.')
+          with open('thonny/__init__.py', 'r') as f:
+              content = f.read()
+              assert 'SINGLE_INSTANCE_DEFAULT = True' in content, 'Single instance mode not enabled'
+              print('Single instance mode enabled')
+          with open('thonny/editors.py', 'r') as f:
+              content = f.read()
+              assert 'os.path.isfile(filename)' in content, 'File check not using isfile()'
+              print('File loading uses isfile() check')
+          print('All portable fixes validated')
+          PYEOF
       
       - name: Check Tcl/Tk auto-detection in launch script
+        shell: bash
         run: |
-          python -c "
-with open('launch_thonny.py', 'r') as f:
-    content = f.read()
-    assert 'setup_tcl_tk' in content, 'Tcl/Tk auto-detection not found'
-    assert 'TCL_LIBRARY' in content, 'Tcl/Tk configuration not found'
-    print('✓ Tcl/Tk auto-detection present in launch script')
-"
+          python - <<'PYEOF'
+          with open('launch_thonny.py', 'r') as f:
+              content = f.read()
+              assert 'setup_tcl_tk' in content, 'Tcl/Tk auto-detection not found'
+              assert 'TCL_LIBRARY' in content, 'Tcl/Tk configuration not found'
+              print('Tcl/Tk auto-detection present in launch script')
+          PYEOF
 
   test-shell-scripts:
     runs-on: ${{ matrix.os }}

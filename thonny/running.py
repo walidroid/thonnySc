@@ -1086,7 +1086,7 @@ class SubprocessProxy(BackendProxy, ABC):
 
         creationflags = 0
         if running_on_windows():
-            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
 
         logger.info("Starting the backend: %s %s", cmd_line, get_workbench().get_local_cwd())
 
