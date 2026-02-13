@@ -6,6 +6,7 @@ Send2Trash>=1.8.0
 packaging>=23.0
 esptool == 5.1.0
 pyserial == 3.5
+adafruit-board-toolkit >= 1.1.0
 wheel == 0.45.1
 numpy == 2.4.0
 jedi>=0.19.0
