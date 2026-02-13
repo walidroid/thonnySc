@@ -693,6 +693,26 @@ class Runner:
     def _handle_backend_termination(self, returncode: int) -> None:
         err = f"Process ended with exit code {returncode}."
 
+        # Translate known Windows crash codes to human-readable messages
+        _WINDOWS_CRASH_CODES = {
+            3221226505: ("STATUS_STACK_BUFFER_OVERRUN (0xC0000409)",
+                         "Fréquent avec PyQt5/Qt — vérifiez les conflits de DLLs ou les plugins Qt manquants."),
+            3221225477: ("ACCESS_VIOLATION (0xC0000005)",
+                         "Erreur de segmentation — référence nulle ou corruption de mémoire possible."),
+            3221225725: ("STATUS_CONTROL_C_EXIT (0xC000013A)",
+                         "Le processus a été interrompu par Ctrl+C."),
+            3221225786: ("STATUS_DLL_NOT_FOUND (0xC0000135)",
+                         "Une DLL requise est introuvable."),
+            3221225794: ("STATUS_DLL_INIT_FAILED (0xC0000142)",
+                         "Échec d'initialisation d'une DLL — vérifiez les dépendances."),
+            3221225501: ("STATUS_HEAP_CORRUPTION (0xC0000374)",
+                         "Corruption de la mémoire — possible conflit de bibliothèques."),
+        }
+
+        if returncode in _WINDOWS_CRASH_CODES:
+            name, hint = _WINDOWS_CRASH_CODES[returncode]
+            err += f"\n→ {name}\n  {hint}"
+
         try:
             faults_file = os.path.join(THONNY_USER_DIR, "backend_faults.log")
             if os.path.exists(faults_file):

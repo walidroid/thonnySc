@@ -36,7 +36,7 @@ def add_pyqt_code():
     if path:
         global qt_ui_file
         qt_ui_file = path
-        get_workbench().get_menu("pyqt5").delete(1, "end")
+        # Menu cleanup removed - commands are now in the Tools menu
         # get_workbench().get_view("UiViewerPlugin").load_new_ui_file(path)
         # get_workbench().show_view("UiViewerPlugin",True)
         file = minidom.parse(path)
@@ -52,14 +52,33 @@ def add_pyqt_code():
             
 
         get_workbench().get_editor_notebook().get_current_editor().get_code_view().text.insert(
-            '0.0','from PyQt5.uic import loadUi\n'+
-            'from PyQt5.QtWidgets import QApplication\n'+
-            '\n'+mytxt+'\n'+
-            'app = QApplication([])\n'+
-            'windows = loadUi ("'+ path +'")\n'+
-            'windows.show()\n'+
-            btnstxt+'\n'
-            'app.exec_()'
+            '0.0',
+            'import sys\n'
+            'import faulthandler\n'
+            'import traceback\n'
+            'from PyQt5.uic import loadUi\n'
+            'from PyQt5.QtWidgets import QApplication\n'
+            '\n'
+            '# Activer faulthandler pour afficher les erreurs natives (segfault)\n'
+            'faulthandler.enable()\n'
+            '\n'
+            '# Intercepter les exceptions non gérées dans la boucle Qt\n'
+            'def _excepthook(exc_type, exc_value, exc_tb):\n'
+            '    traceback.print_exception(exc_type, exc_value, exc_tb)\n'
+            '    sys.exit(1)\n'
+            'sys.excepthook = _excepthook\n'
+            '\n'
+            + mytxt + '\n'
+            'try:\n'
+            '    app = QApplication([])\n'
+            '    windows = loadUi("' + path + '")\n'
+            '    windows.show()\n'
+            '    ' + btnstxt.replace('\n', '\n    ') + '\n'
+            '    app.exec_()\n'
+            'except Exception as e:\n'
+            '    print(f"Erreur: {type(e).__name__}: {e}", file=sys.stderr)\n'
+            '    traceback.print_exc()\n'
+            '    sys.exit(1)\n'
             )
 def find_qt_designer():
     """Find Qt Designer executable in common locations."""
@@ -195,7 +214,7 @@ def load_plugin():
 	
     get_workbench().add_command(
         "selmen_command",
-        "pyqt5",
+        "tools",
         tr("Ajouter code PyQt5"),
         add_pyqt_code,
 	    default_sequence=select_sequence("<Control-Shift-B>", "<Command-Shift-B>"),
@@ -205,7 +224,7 @@ def load_plugin():
     )
     get_workbench().add_command(
         "pyqt5_open_in_designer",
-        "pyqt5",
+        "tools",
         tr("Ouvrir dans Designer"),
         open_in_designer,
 	    #default_sequence=select_sequence("<Control-Shift-B>", "<Command-Shift-B>"),
