@@ -977,7 +977,9 @@ class HelperNotSupportedError(RuntimeError):
 
 
 def init():
-    get_workbench().set_default("assistance.open_assistant_on_errors", True)
-    get_workbench().set_default("assistance.open_assistant_on_warnings", False)
-    get_workbench().set_default("assistance.disabled_checks", [])
-    get_workbench().add_view(AssistantView, tr("Assistant"), "se", visible_by_default=False)
+    # Removed: Assistant feature disabled
+    # get_workbench().set_default("assistance.open_assistant_on_errors", True)
+    # get_workbench().set_default("assistance.open_assistant_on_warnings", False)
+    # get_workbench().set_default("assistance.disabled_checks", [])
+    # get_workbench().add_view(AssistantView, tr("Assistant"), "se", visible_by_default=False)
+    pass

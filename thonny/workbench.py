@@ -700,16 +700,17 @@ class Workbench(tk.Tk):
                 group=101,
             )
 
-        self.add_command(
-            "SupportUkraine",
-            "help",
-            tr("Support Ukraine"),
-            self._support_ukraine,
-            image="Ukraine",
-            caption=tr("Support"),
-            include_in_toolbar=False,
-            group=101,
-        )
+        # Removed: Support Ukraine menu item
+        # self.add_command(
+        #     "SupportUkraine",
+        #     "help",
+        #     tr("Support Ukraine"),
+        #     self._support_ukraine,
+        #     image="Ukraine",
+        #     caption=tr("Support"),
+        #     include_in_toolbar=False,
+        #     group=101,
+        # )
 
         if thonny.in_debug_mode():
             self.bind_all("<Control-Shift-Alt-D>", self._print_state_for_debugging, True)
@@ -1084,8 +1085,13 @@ class Workbench(tk.Tk):
         menu = self.get_menu(menu_name)
 
         if image:
-            _image = self.get_image(image)  # type: Optional[tk.PhotoImage]
-            _disabled_image = self.get_image(image, disabled=True)
+            # Use larger images for toolbar buttons
+            if include_in_toolbar:
+                _image = self.get_toolbar_image(image)  # type: Optional[tk.PhotoImage]
+                _disabled_image = self.get_toolbar_image(image, disabled=True)
+            else:
+                _image = self.get_image(image)  # type: Optional[tk.PhotoImage]
+                _disabled_image = self.get_image(image, disabled=True)
         else:
             _image = None
             _disabled_image = None
@@ -1710,6 +1716,46 @@ class Workbench(tk.Tk):
         self._images.add(img)
         return img
 
+    def get_toolbar_image(self, filename: str, tk_name: Optional[str] = None, disabled=False) -> tk.PhotoImage:
+        """Get image for toolbar buttons, always using 2x scaling for larger buttons."""
+        if filename in self._image_mapping_by_theme[self._current_theme_name]:
+            filename = self._image_mapping_by_theme[self._current_theme_name][filename]
+
+        if filename in self._default_image_mapping:
+            filename = self._default_image_mapping[filename]
+
+        # if path is relative then interpret it as living in res folder
+        if not os.path.isabs(filename):
+            filename = os.path.join(self.get_package_dir(), "res", filename)
+            if not os.path.exists(filename):
+                if os.path.exists(filename + ".png"):
+                    filename = filename + ".png"
+                elif os.path.exists(filename + ".gif"):
+                    filename = filename + ".gif"
+
+        if disabled:
+            filename = os.path.join(
+                os.path.dirname(filename), "_disabled_" + os.path.basename(filename)
+            )
+            if not os.path.exists(filename):
+                return None
+
+        # Force 2x scaling for toolbar buttons
+        scaled_filename = filename[:-4] + "_2x.png"
+        if os.path.exists(scaled_filename):
+            filename = scaled_filename
+        else:
+            # Scale on-the-fly
+            img = tk.PhotoImage(file=filename)
+            img2 = tk.PhotoImage(tk_name)
+            self.tk.call(img2, "copy", img.name, "-zoom", 2, 2)
+            self._images.add(img2)
+            return img2
+
+        img = tk.PhotoImage(tk_name, file=filename)
+        self._images.add(img)
+        return img
+
     def show_view(self, view_id: str, set_focus: bool = True) -> Union[bool, tk.Widget]:
         """View must be already registered.
 
@@ -2025,7 +2071,7 @@ class Workbench(tk.Tk):
             state=tk.NORMAL,
             text=caption,
             compound="top" if self.in_simple_mode() else None,
-            pad=(10, 0) if self.in_simple_mode() else None,
+            pad=(20, 10) if self.in_simple_mode() else (20, 10),  # Doubled padding for larger buttons
             width=button_width,
         )
 
