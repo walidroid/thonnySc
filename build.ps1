@@ -192,6 +192,24 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Warning: jedi installation failed - Code completion may not work" -ForegroundColor Yellow
 }
 
+# Step 2.6.6: Install serial port packages
+Write-Host "`nInstalling pyserial and adafruit-board-toolkit for serial port detection..."
+& ".\Python\python.exe" -m pip install pyserial==3.5 "adafruit-board-toolkit>=1.1.0" --no-warn-script-location
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Serial port packages installed successfully" -ForegroundColor Green
+    
+    # Verify installation
+    $serialCheck = & ".\Python\python.exe" -c "import serial; import adafruit_board_toolkit; print('OK')" 2>$null
+    if ($serialCheck -eq "OK") {
+        Write-Host "Serial port packages verification successful" -ForegroundColor Green
+    } else {
+        Write-Host "Warning: Serial port packages verification failed" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Warning: Serial port packages installation failed - ESP32/MicroPython serial detection may not work" -ForegroundColor Yellow
+}
+
 # Step 2.6.4: Install thonny-autosave and missing stdlib dependencies
 Write-Host "`nInstalling thonny-autosave and dependencies..."
 

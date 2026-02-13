@@ -169,6 +169,25 @@ jobs:
           Write-Host "⚠ Warning: jedi installation failed"
         }
         
+    - name: Install Serial Port Packages
+      run: |
+        Write-Host "Installing pyserial and adafruit-board-toolkit for serial port detection..."
+        & ".\\Python\\python.exe" -m pip install pyserial==3.5 "adafruit-board-toolkit>=1.1.0" --no-warn-script-location
+        
+        if ($LASTEXITCODE -eq 0) {
+          Write-Host "✓ Serial port packages installed successfully"
+          
+          # Verify installation
+          $serialCheck = & ".\\Python\\python.exe" -c "import serial; import adafruit_board_toolkit; print('OK')" 2>$null
+          if ($serialCheck -eq "OK") {
+            Write-Host "✓ Serial port packages verification successful"
+          } else {
+            Write-Host "⚠ Warning: Serial port packages verification failed"
+          }
+        } else {
+          Write-Host "⚠ Warning: Serial port packages installation failed"
+        }
+        
     - name: Ensure sched.py exists
       run: |
         # Autosave plugin needs sched.py which is missing in embeddable python
