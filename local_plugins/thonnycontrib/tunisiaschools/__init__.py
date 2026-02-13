@@ -133,7 +133,7 @@ def find_qt_designer():
 
 def open_in_designer():
     """
-    Opens Qt Designer with the current UI file.
+    Opens Qt Designer directly.
     Shows error messages if Qt Designer is not found.
     """
     designer_exe = find_qt_designer()
@@ -157,16 +157,21 @@ def open_in_designer():
     
     global qt_ui_file
     try:
-        # Use os.startfile for true process independence (like double-clicking)
-        # This completely detaches Qt Designer from Thonny
-        if qt_ui_file:
-            # For opening with a file, we need to use the 'open' verb with the file
-            # and let Windows associate it with the designer, OR use subprocess with shell=True
-            os.startfile(qt_ui_file, 'open')
+        # Always launch designer.exe directly using subprocess
+        # This ensures it opens reliably even without file associations
+        cmd = [designer_exe]
+        if qt_ui_file and os.path.isfile(qt_ui_file):
+            cmd.append(qt_ui_file)
             print(f"✓ Ouvert {qt_ui_file} dans Qt Designer")
         else:
-            os.startfile(designer_exe)
-            print(f"✓ Qt Designer lancé")
+            print(f"✓ Qt Designer lancé: {designer_exe}")
+        
+        # Use subprocess with CREATE_NEW_PROCESS_GROUP to fully detach from Thonny
+        subprocess.Popen(
+            cmd,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS if sys.platform == 'win32' else 0,
+            close_fds=True,
+        )
         return True
     except Exception as e:
         try:

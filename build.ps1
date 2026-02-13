@@ -277,6 +277,17 @@ if (Test-Path "thonnycontrib\thonny_friendly") {
 
 # thonny-autosave restored (sched.py provided)
 
+# Step 2.8: Remove unused locale directories
+Write-Host "`n[2.8/5] Removing unused locale directories..." -ForegroundColor Cyan
+$localeDir = "thonny\locale"
+if (Test-Path $localeDir) {
+    $keepDirs = @("fr_FR", "en_US")
+    Get-ChildItem $localeDir -Directory | Where-Object { $_.Name -notin $keepDirs } | ForEach-Object {
+        Remove-Item $_.FullName -Recurse -Force
+        Write-Host "  Removed locale: $($_.Name)"
+    }
+    Write-Host "Locale cleanup complete" -ForegroundColor Green
+}
 
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan

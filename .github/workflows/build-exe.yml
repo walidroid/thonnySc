@@ -265,6 +265,20 @@ jobs:
           Write-Host "✓ Removed thonny-autosave plugin"
         }
         
+    - name: Remove unused locale directories
+      run: |
+        Write-Host "Removing unused locale directories (keeping only fr_FR and en_US)..."
+        $localeDir = "thonny\locale"
+        if (Test-Path $localeDir) {
+          $keepDirs = @("fr_FR", "en_US")
+          Get-ChildItem $localeDir -Directory | Where-Object { $_.Name -notin $keepDirs } | ForEach-Object {
+            Remove-Item $_.FullName -Recurse -Force
+            Write-Host "  Removed locale: $($_.Name)"
+          }
+          Write-Host "✓ Locale cleanup complete. Remaining:"
+          Get-ChildItem $localeDir -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
+        }
+        
     - name: Build EXE with PyInstaller
       run: |
         pyinstaller thonny.spec

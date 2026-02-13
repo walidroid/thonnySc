@@ -47,6 +47,17 @@ setup_tcl_tk()
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
+# Ensure site-packages directories are in sys.path
+# This is critical for packages like pyserial and adafruit-board-toolkit
+# which may not be found if the Python installation config is broken
+for sp_dir in [
+    os.path.join(project_root, "Lib", "site-packages"),
+    os.path.join(project_root, "Python", "Lib", "site-packages"),
+]:
+    if os.path.isdir(sp_dir) and sp_dir not in sys.path:
+        sys.path.insert(1, sp_dir)
+        print(f"DEBUG: Added site-packages: {sp_dir}")
+
 print(f"DEBUG: Project root: {project_root}")
 print(f"DEBUG: sys.path: {sys.path[:3]}...")
 

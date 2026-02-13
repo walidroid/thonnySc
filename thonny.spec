@@ -74,6 +74,9 @@ a = Analysis(
         'serial.tools',
         'serial.tools.list_ports',
         'serial.tools.list_ports_windows',
+        # adafruit board toolkit for faster serial port detection
+        'adafruit_board_toolkit',
+        'adafruit_board_toolkit._list_ports_windows',
     ] + friendly_hiddenimports + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
