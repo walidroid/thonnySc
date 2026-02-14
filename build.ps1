@@ -11,7 +11,7 @@ Set-Location -Path $PSScriptRoot
 
 # Step 1: Download Python Embeddable Package
 Write-Host "`n[1/5] Downloading Python Embeddable Package..." -ForegroundColor Cyan
-$pythonVersion = "3.11.9"
+$pythonVersion = "3.13.3"
 $url = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip"
 
 if (Test-Path "Python\python.exe") {

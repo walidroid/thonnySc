@@ -724,9 +724,10 @@ class Runner:
             logger.exception("Failed retrieving backend faults")
 
         # Drain any remaining stderr from the process
+        # Drain any remaining stderr from the process
         try:
-            if self._proc and self._proc.stderr:
-                remaining = self._proc.stderr.read()
+            if hasattr(self, "_proxy") and hasattr(self._proxy, "_proc") and self._proxy._proc and self._proxy._proc.stderr:
+                remaining = self._proxy._proc.stderr.read()
                 if remaining and remaining.strip():
                     err += "\n\n" + remaining.strip()
         except Exception:

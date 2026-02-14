@@ -1311,7 +1311,11 @@ class PluginsPipDialog(PipDialog):
 
 class DetailsDialog(CommonDialog):
     def __init__(self, master, package_metadata, selected_version, support_update_deps_switch):
-        from distutils.version import StrictVersion
+        try:
+            from packaging.version import parse as parse_version
+        except ImportError:
+            # Fallback for older environments or bootstrapping
+            from distutils.version import LooseVersion as parse_version
 
         assert isinstance(master, PipDialog)
         self._pip_dialog = cast(PipDialog, master)
@@ -1349,13 +1353,13 @@ class DetailsDialog(CommonDialog):
             else:
                 s2 = s
             try:
-                return StrictVersion(s2)
+                return parse_version(s2)
             except Exception:
                 # use only numbers
                 nums = re.findall(r"\d+", s)
                 while len(nums) < 2:
                     nums.append("0")
-                return StrictVersion(".".join(nums[:3]))
+                return parse_version(".".join(nums[:3]))
 
         version_strings = list(package_metadata["releases"].keys())
         version_strings.sort(key=version_sort_key, reverse=True)
@@ -1517,14 +1521,17 @@ def _fetch_url_future(url, fallback_url=None, timeout=10):
 
 
 def _get_latest_stable_version(version_strings):
-    from distutils.version import LooseVersion
+    try:
+        from packaging.version import parse as parse_version
+    except ImportError:
+        from distutils.version import LooseVersion as parse_version
 
     versions = []
     for s in version_strings:
         if s.replace(".", "").isnumeric():  # Assuming stable versions have only dots and numbers
             versions.append(
-                LooseVersion(s)
-            )  # LooseVersion __str__ doesn't change the version string
+                parse_version(s)
+            )  # packaging.version.Version __str__ matches input usually
 
     if len(versions) == 0:
         return None
