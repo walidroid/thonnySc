@@ -717,9 +717,20 @@ class Runner:
             faults_file = os.path.join(THONNY_USER_DIR, "backend_faults.log")
             if os.path.exists(faults_file):
                 with open(faults_file, encoding="ASCII", errors="replace") as fp:
-                    err += fp.read()
+                    faults_content = fp.read().strip()
+                if faults_content:
+                    err += "\n\nTrace du crash natif:\n" + faults_content
         except Exception:
             logger.exception("Failed retrieving backend faults")
+
+        # Drain any remaining stderr from the process
+        try:
+            if self._proc and self._proc.stderr:
+                remaining = self._proc.stderr.read()
+                if remaining and remaining.strip():
+                    err += "\n\n" + remaining.strip()
+        except Exception:
+            logger.exception("Failed draining stderr")
 
         get_workbench().event_generate("ProgramOutput", stream_name="stderr", data="\n" + err)
 

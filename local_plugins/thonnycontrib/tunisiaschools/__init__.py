@@ -52,44 +52,16 @@ def add_pyqt_code():
             
 
         get_workbench().get_editor_notebook().get_current_editor().get_code_view().text.insert(
-            '0.0',
-            'import sys\n'
-            'import faulthandler\n'
-            'import traceback\n'
-            '\n'
-            '# Activer faulthandler pour afficher les erreurs natives (segfault)\n'
-            'faulthandler.enable()\n'
-            '\n'
-            '# Vérifier la syntaxe avant de charger Qt (évite le crash 0xC0000409)\n'
-            'try:\n'
-            '    compile(open(__file__).read(), __file__, "exec")\n'
-            'except SyntaxError as e:\n'
-            '    print("Erreur de syntaxe ligne " + str(e.lineno) + ": " + str(e.msg), file=sys.stderr)\n'
-            '    if e.text:\n'
-            '        print("  " + e.text.rstrip(), file=sys.stderr)\n'
-            '    sys.exit(1)\n'
-            '\n'
-            'from PyQt5.uic import loadUi\n'
-            'from PyQt5.QtWidgets import QApplication\n'
-            '\n'
-            '# Intercepter les exceptions non gérées dans la boucle Qt\n'
-            'def _excepthook(exc_type, exc_value, exc_tb):\n'
-            '    traceback.print_exception(exc_type, exc_value, exc_tb)\n'
-            '    sys.exit(1)\n'
-            'sys.excepthook = _excepthook\n'
-            '\n'
-            + mytxt + '\n'
-            'try:\n'
-            '    app = QApplication([])\n'
-            '    windows = loadUi("' + path + '")\n'
-            '    windows.show()\n'
-            '    ' + btnstxt.replace('\n', '\n    ') + '\n'
-            '    app.exec_()\n'
-            'except Exception as e:\n'
-            '    print(f"Erreur: {type(e).__name__}: {e}", file=sys.stderr)\n'
-            '    traceback.print_exc()\n'
-            '    sys.exit(1)\n'
+            '0.0','from PyQt5.uic import loadUi\n'+
+            'from PyQt5.QtWidgets import QApplication\n'+
+            '\n'+mytxt+'\n'+
+            'app = QApplication([])\n'+
+            'windows = loadUi ("'+ path +'")\n'+
+            'windows.show()\n'+
+            btnstxt+'\n'
+            'app.exec_()'
             )
+
 
 def find_qt_designer():
     """Find Qt Designer executable in common locations."""

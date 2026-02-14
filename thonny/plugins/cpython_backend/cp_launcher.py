@@ -51,6 +51,12 @@ if __name__ == "__main__":
 
     thonny.prepare_thonny_user_dir()
     thonny.configure_backend_logging()
+
+    # Enable faulthandler to capture native crash tracebacks (e.g. PyQt5 0xC0000409)
+    import faulthandler
+    _faults_file = open(os.path.join(thonny.THONNY_USER_DIR, "backend_faults.log"), mode="w")
+    faulthandler.enable(_faults_file)
+
     print(PROCESS_ACK)
 
     if using_temp_augmented_sys_path:
