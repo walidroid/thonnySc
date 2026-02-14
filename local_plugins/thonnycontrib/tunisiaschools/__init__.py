@@ -56,11 +56,21 @@ def add_pyqt_code():
             'import sys\n'
             'import faulthandler\n'
             'import traceback\n'
-            'from PyQt5.uic import loadUi\n'
-            'from PyQt5.QtWidgets import QApplication\n'
             '\n'
             '# Activer faulthandler pour afficher les erreurs natives (segfault)\n'
             'faulthandler.enable()\n'
+            '\n'
+            '# Vérifier la syntaxe avant de charger Qt (évite le crash 0xC0000409)\n'
+            'try:\n'
+            '    compile(open(__file__).read(), __file__, "exec")\n'
+            'except SyntaxError as e:\n'
+            '    print("Erreur de syntaxe ligne " + str(e.lineno) + ": " + str(e.msg), file=sys.stderr)\n'
+            '    if e.text:\n'
+            '        print("  " + e.text.rstrip(), file=sys.stderr)\n'
+            '    sys.exit(1)\n'
+            '\n'
+            'from PyQt5.uic import loadUi\n'
+            'from PyQt5.QtWidgets import QApplication\n'
             '\n'
             '# Intercepter les exceptions non gérées dans la boucle Qt\n'
             'def _excepthook(exc_type, exc_value, exc_tb):\n'
@@ -80,6 +90,7 @@ def add_pyqt_code():
             '    traceback.print_exc()\n'
             '    sys.exit(1)\n'
             )
+
 def find_qt_designer():
     """Find Qt Designer executable in common locations."""
     import shutil
