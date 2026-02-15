@@ -2501,11 +2501,8 @@ class Workbench(tk.Tk):
         # and will show empty table on open
         self.get_view("VariablesView")
 
-        if (
-            self.get_option("assistance.open_assistant_on_errors")
-            or self.get_option("assistance.open_assistant_on_warnings")
-        ) and (self.get_ui_mode() != "simple" or "AssistantView" in SIMPLE_MODE_VIEWS):
-            self.get_view("AssistantView")
+        # Assistant view auto-open logic removed
+
 
     def _save_layout(self) -> None:
         self.update_idletasks()

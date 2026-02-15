@@ -17,24 +17,15 @@ except ImportError:
 
 block_cipher = None
 
-# Collect friendly_traceback data files and filter to keep only French locale
-friendly_datas_raw = collect_data_files('friendly_traceback')
+# Friendly traceback data collection removed
 friendly_datas = []
-for src, dest in friendly_datas_raw:
-    # Keep only French locale files (+ base files)
-    if ('locales\\\\fr' in src or 'locales/fr' in src or 
-        'friendly_tb.pot' in src or 'py.typed' in src):
-        friendly_datas.append((src, dest))
+
 
 # Collect metadata for packages that query their version at runtime
 metadata_datas = []
-packages_with_metadata = [
     'thonny',
-    'friendly_traceback',
     'asttokens',
     'jedi',
-    'pylint',
-    'mypy',
     'docutils',
     'Send2Trash',
     'packaging',
@@ -47,7 +38,7 @@ for package in packages_with_metadata:
         pass  # Package might not be installed
 
 # Collect all submodules
-friendly_hiddenimports = collect_submodules('friendly_traceback')
+friendly_hiddenimports = []
 thonny_hiddenimports = collect_submodules('thonny')
 jedi_hiddenimports = collect_submodules('jedi')
 parso_hiddenimports = collect_submodules('parso')
@@ -59,7 +50,7 @@ a = Analysis(
     datas=[
         ('thonny', 'thonny'),
         ('local_plugins/thonnycontrib', 'thonnycontrib'),  # Include fixed plugins
-    ] + friendly_datas + metadata_datas + qt_datas,
+    ] + metadata_datas + qt_datas,
     hiddenimports=[
         'tkinter',
         'tkinter.ttk',
@@ -68,8 +59,8 @@ a = Analysis(
         'xml',
         'xml.dom',
         'xml.dom.minidom',
-        'friendly_traceback',
-        'thonnycontrib.thonny_friendly',
+        'xml.dom.minidom',
+
         'thonnycontrib.tunisiaschools',
         'thonnycontrib.thonny_simple_autocomplete',
         'thonnycontrib.thonny_autosave',
@@ -90,7 +81,7 @@ a = Analysis(
         # adafruit board toolkit for faster serial port detection
         'adafruit_board_toolkit',
         'adafruit_board_toolkit._list_ports_windows',
-    ] + friendly_hiddenimports + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + qt_hiddenimports,
+    ] + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + qt_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
     runtime_hooks=[],
