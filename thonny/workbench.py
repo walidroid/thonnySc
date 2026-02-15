@@ -23,7 +23,7 @@ from warnings import warn
 import thonny
 from thonny import (
     THONNY_USER_DIR,
-    assistance,
+
     get_runner,
     get_shell,
     is_portable,
@@ -164,7 +164,7 @@ class Workbench(tk.Tk):
             ShellView, tr("Shell"), "s", visible_by_default=True, default_position_key="A"
         )
 
-        assistance.init()
+
         logger.info("Creating runner")
         self._runner = Runner()
         self._init_hooks()  # Plugins may register hooks, so initialized them before to load plugins.
