@@ -1321,7 +1321,33 @@ class Executor:
     @return_execution_result
     @prepare_hooks
     def _execute_prepared_user_code(self, statements, global_vars):
-        exec(statements, global_vars)
+        try:
+            # Set up exception handling for Qt to prevent crashes
+            import sys
+            
+            def qt_exception_handler(exc_type, exc_value, exc_traceback):
+                if exc_type.__name__ == 'SystemExit':
+                    try:
+                        code = exc_value.code
+                    except AttributeError:
+                        code = 0
+                    sys.exit(code)
+                
+                import traceback
+                print("\n" + "="*60, file=sys.stderr)
+                print("CPython Backend Error:", file=sys.stderr)
+                print("="*60, file=sys.stderr)
+                traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
+                print("="*60 + "\n", file=sys.stderr)
+            
+            # Temporary replace excepthook
+            old_excepthook = sys.excepthook
+            sys.excepthook = qt_exception_handler
+            
+            exec(statements, global_vars)
+        finally:
+            if 'old_excepthook' in locals():
+                sys.excepthook = old_excepthook
 
     def find_spec(self, fullname, path=None, target=None):
         """override in subclass for custom-loading user modules"""

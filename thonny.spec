@@ -12,6 +12,9 @@ try:
     if os.path.isdir(qt_plugin_src):
         qt_datas.append((qt_plugin_src, 'PyQt5/Qt5/plugins'))
         qt_hiddenimports.append('PyQt5.sip')
+        qt_hiddenimports.append('PyQt5.QtCore')
+        qt_hiddenimports.append('PyQt5.QtWidgets')
+        qt_hiddenimports.append('PyQt5.uic')
 except ImportError:
     pass
 
@@ -82,6 +85,10 @@ a = Analysis(
         # adafruit board toolkit for faster serial port detection
         'adafruit_board_toolkit',
         'adafruit_board_toolkit._list_ports_windows',
+        'PyQt5.sip',
+        'PyQt5.QtCore',
+        'PyQt5.QtWidgets',
+        'PyQt5.uic',
     ] + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + qt_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
