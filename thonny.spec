@@ -23,6 +23,7 @@ friendly_datas = []
 
 # Collect metadata for packages that query their version at runtime
 metadata_datas = []
+packages_with_metadata = [
     'thonny',
     'asttokens',
     'jedi',
