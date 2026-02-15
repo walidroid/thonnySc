@@ -2,6 +2,19 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 import os
 
+# Try to locate PyQt5 plugins (User Suggestion)
+qt_datas = []
+qt_hiddenimports = []
+try:
+    import PyQt5
+    pyqt5_path = os.path.dirname(PyQt5.__file__)
+    qt_plugin_src = os.path.join(pyqt5_path, 'Qt5', 'plugins')
+    if os.path.isdir(qt_plugin_src):
+        qt_datas.append((qt_plugin_src, 'PyQt5/Qt5/plugins'))
+        qt_hiddenimports.append('PyQt5.sip')
+except ImportError:
+    pass
+
 block_cipher = None
 
 # Collect friendly_traceback data files and filter to keep only French locale
@@ -46,7 +59,7 @@ a = Analysis(
     datas=[
         ('thonny', 'thonny'),
         ('local_plugins/thonnycontrib', 'thonnycontrib'),  # Include fixed plugins
-    ] + friendly_datas + metadata_datas,
+    ] + friendly_datas + metadata_datas + qt_datas,
     hiddenimports=[
         'tkinter',
         'tkinter.ttk',
@@ -77,7 +90,7 @@ a = Analysis(
         # adafruit board toolkit for faster serial port detection
         'adafruit_board_toolkit',
         'adafruit_board_toolkit._list_ports_windows',
-    ] + friendly_hiddenimports + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports,
+    ] + friendly_hiddenimports + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + qt_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
     runtime_hooks=[],

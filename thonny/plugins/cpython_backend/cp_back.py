@@ -1305,7 +1305,17 @@ class Executor:
                 raise ValueError("Unknown mode", mode)
 
             return self._execute_prepared_user_code(statements, global_vars)
-        except SyntaxError:
+        except SyntaxError as e:
+            import sys
+            try:
+                print(f"  File \"{e.filename}\", line {e.lineno}", file=sys.stderr)
+                if e.text:
+                    print(f"    {e.text.strip()}", file=sys.stderr)
+                    if e.offset:
+                        print(f"    {' ' * (e.offset - 1)}^", file=sys.stderr)
+                print(f"SyntaxError: {e.msg}", file=sys.stderr)
+            except Exception:
+                pass
             return {"user_exception": self._backend._prepare_user_exception()}
 
     @return_execution_result

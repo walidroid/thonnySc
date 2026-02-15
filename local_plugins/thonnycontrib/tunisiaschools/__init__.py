@@ -51,7 +51,13 @@ def add_pyqt_code():
                 
             
 
-        get_workbench().get_editor_notebook().get_current_editor().get_code_view().text.insert(
+
+        editor = get_workbench().get_editor_notebook().get_current_editor()
+        if not editor:
+            get_workbench().new_file()
+            editor = get_workbench().get_editor_notebook().get_current_editor()
+            
+        editor.get_code_view().text.insert(
             '0.0','from PyQt5.uic import loadUi\n'+
             'from PyQt5.QtWidgets import QApplication\n'+
             '\n'+mytxt+'\n'+
