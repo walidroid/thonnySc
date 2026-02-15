@@ -291,7 +291,26 @@ if (Test-Path $localeDir) {
 
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
-pyinstaller thonny.spec
+
+# Install dependencies into System Python for PyInstaller visibility
+Write-Host "Installing dependencies into System Python (required for PyInstaller bundling)..."
+if (Get-Command "py" -ErrorAction SilentlyContinue) {
+    Write-Host "Using 'py' launcher..."
+    py -3 -m pip install -r requirements.txt --no-warn-script-location
+    py -3 -m pip install pyinstaller --no-warn-script-location
+    Write-Host "Running PyInstaller..."
+    py -3 -m PyInstaller thonny.spec
+} elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
+    Write-Host "Using 'python' command..."
+    python -m pip install -r requirements.txt --no-warn-script-location
+    python -m pip install pyinstaller --no-warn-script-location
+    Write-Host "Running PyInstaller..."
+    python -m PyInstaller thonny.spec
+} else {
+    Write-Host "CRITICAL WARNING: System Python not found. PyInstaller might fail or use wrong environment!" -ForegroundColor Red
+    # Fallback to direct command if it exists
+    pyinstaller thonny.spec
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "PyInstaller build failed!" -ForegroundColor Red
