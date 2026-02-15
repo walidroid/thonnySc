@@ -1715,6 +1715,14 @@ def get_front_interpreter_for_subprocess(candidate=None):
     if candidate is None:
         candidate = sys.executable
 
+    # Fix for frozen app (ThonnySc):
+    # If candidate is the main executable (Thonny.exe), we must find the bundled Python
+    if getattr(sys, 'frozen', False) and candidate.lower() == sys.executable.lower():
+        # Look for bundled Python next to the executable (standard Inno Setup layout)
+        bundled_python = os.path.join(os.path.dirname(sys.executable), "Python", "python.exe")
+        if os.path.exists(bundled_python):
+            candidate = bundled_python
+
     pythonw = candidate.replace("python.exe", "pythonw.exe")
     if not _console_allocated and os.path.exists(pythonw):
         return pythonw
