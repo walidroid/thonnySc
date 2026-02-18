@@ -18,6 +18,15 @@ try:
 except ImportError:
     pass
 
+# Explicitly bundle tkinter package to fix missing module error
+try:
+    import tkinter
+    tkinter_path = os.path.dirname(tkinter.__file__)
+    if os.path.isdir(tkinter_path):
+        qt_datas.append((tkinter_path, 'tkinter'))
+except ImportError:
+    pass
+
 block_cipher = None
 
 # Friendly traceback data collection removed
