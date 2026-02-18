@@ -47,7 +47,7 @@ AlwaysShowDirOnReadyPage=yes
 
 ; Request extra space for precompiling libraries
 ExtraDiskSpaceRequired=25000000
-OutputDir=dist
+OutputDir=..\..\output
 OutputBaseFilename={#InstallerPrefix}-{#AppVer}
 Compression=lzma2/ultra
 SolidCompression=yes

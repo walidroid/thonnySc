@@ -152,14 +152,25 @@ Write-Host "Copied launch_thonny.py to dist"
 # Step 4: Build Installer with Inno Setup
 Write-Host "`n[4/5] Building Installer with Inno Setup..." -ForegroundColor Cyan
 $innoPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+$issPath = "packaging\windows\inno_setup.iss"
 
 if (Test-Path $innoPath) {
-    & $innoPath "installer.iss"
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "Installer built successfully!" -ForegroundColor Green
-        Write-Host "Distribution ready at: $PSScriptRoot\output" -ForegroundColor Cyan
+    if (Test-Path $issPath) {
+        # Ensure output directory exists
+        if (-not (Test-Path "output")) { New-Item -ItemType Directory -Path "output" | Out-Null }
+        
+        Write-Host "Running ISCC with SourceFolder=dist\Thonny"
+        & $innoPath "/dAppVer=$Version" "/dSourceFolder=$PSScriptRoot\dist\Thonny" "/dInstallerPrefix=thonny" "$issPath"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Installer built successfully!" -ForegroundColor Green
+            Write-Host "Distribution ready at: $PSScriptRoot\output" -ForegroundColor Cyan
+        } else {
+            Write-Host "Installer compilation failed!" -ForegroundColor Red
+            exit 1
+        }
     } else {
-        Write-Host "Installer compilation failed!" -ForegroundColor Red
+        Write-Host "Inno Setup script not found at: $issPath" -ForegroundColor Red
         exit 1
     }
 } else {
