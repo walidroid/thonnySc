@@ -1,7 +1,10 @@
 name: Build Thonny Installer
 
 on:
-
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
@@ -12,312 +15,36 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Configure Git Safe Directory
-      run: git config --global --add safe.directory '*'
-      
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.13'
         
-    - name: Generate version number
-      id: version
-      run: |
-        $date = Get-Date
-        $year = $date.Year
-        $month = $date.Month
-        $day = $date.Day
-        $version = "$year.$month.$day.${{ github.run_number }}"
-        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-        echo "VERSION_FILE=ThonnySc_v$version.exe" >> $env:GITHUB_OUTPUT
-        echo "Generated version: $version"
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-        pip install friendly-traceback
-        pip install .
-        
-    - name: Download offline dependencies
-      run: |
-        mkdir wheels
-        pip download -r requirements.txt -d wheels
-        pip download friendly-traceback -d wheels
-        
-    - name: Download Python Embeddable Package
-      run: |
-        $pythonVersion = "3.13.1"
-        $url = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-embed-amd64.zip"
-        Write-Host "Downloading Python embeddable package from $url"
-        Invoke-WebRequest $url -Out "python-embed.zip"
-        Expand-Archive "python-embed.zip" -DestinationPath "Python"
-        Write-Host "Python embeddable package extracted to Python directory"
-        
-    - name: Configure Embeddable Python
-      run: |
-        # Create marker file for Thonny to identify this as private Python
-        New-Item "Python\thonny_python.ini" -ItemType File
-        Write-Host "Created thonny_python.ini marker file"
-        
-        # Enable site packages in ._pth file
-        $pthFile = Get-ChildItem "Python\python*._pth" | Select-Object -First 1
-        if ($pthFile) {
-          Add-Content $pthFile.FullName "`nimport site"
-          Write-Host "Enabled site packages in $($pthFile.Name)"
-        }
-        
-        # Download and install pip
-        Write-Host "Installing pip..."
-        Invoke-WebRequest "https://bootstrap.pypa.io/get-pip.py" -Out "get-pip.py"
-        & ".\Python\python.exe" "get-pip.py" --no-warn-script-location
-        Write-Host "Pip installed successfully"
-        
-    - name: Install Language Server Dependencies
-      run: |
-        Write-Host "Installing ruff for code linting..."
-        & ".\Python\python.exe" -m pip install ruff --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ Ruff installed successfully"
-          
-          # Verify installation
-          $ruffCheck = & ".\Python\python.exe" -c "import ruff; print('OK')" 2>$null
-          if ($ruffCheck -eq "OK") {
-            Write-Host "✓ Ruff verification successful"
-          } else {
-            Write-Host "⚠ Warning: Ruff verification failed"
-          }
-        } else {
-          Write-Host "⚠ Warning: Ruff installation failed"
-        }
-        
-    - name: Install qt5_applications for Qt Designer
-      run: |
-        Write-Host "Installing qt5_applications for standalone Qt Designer..."
-        & ".\\Python\\python.exe" -m pip install qt5_applications --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ qt5_applications installed successfully"
-          
-          # Verify installation - check designer.exe exists
-          $designerPath = ".\Python\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"
-          if (Test-Path $designerPath) {
-            Write-Host "✓ Qt Designer verification successful at $designerPath"
-          } else {
-            Write-Host "⚠ Warning: Qt Designer not found at expected path"
-          }
-        } else {
-          Write-Host "⚠ Warning: qt5_applications installation failed"
-        }
-        
-    - name: Install esptool for ESP32/ESP8266
-      run: |
-        Write-Host "Installing esptool for ESP32/ESP8266 support..."
-        & ".\\Python\\python.exe" -m pip install esptool==5.1.0 --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ esptool installed successfully"
-          
-          # Verify installation
-          $esptoolCheck = & ".\\Python\\python.exe" -c "import esptool; print('OK')" 2>$null
-          if ($esptoolCheck -eq "OK") {
-            Write-Host "✓ esptool verification successful"
-          } else {
-            Write-Host "⚠ Warning: esptool verification failed"
-          }
-        } else {
-          Write-Host "⚠ Warning: esptool installation failed"
-        }
-        
-    - name: Install minny for Backend Communication
-      run: |
-        Write-Host "Installing minny..."
-        & ".\\Python\\python.exe" -m pip install minny --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ minny installed successfully"
-          
-          # Verify installation
-          $minnyCheck = & ".\\Python\\python.exe" -c "import minny; print('OK')" 2>$null
-          if ($minnyCheck -eq "OK") {
-            Write-Host "✓ minny verification successful"
-          } else {
-            Write-Host "⚠ Warning: minny verification failed"
-          }
-        } else {
-          Write-Host "⚠ Warning: minny installation failed"
-        }
-        
-    - name: Install jedi for Code Completion
-      run: |
-        Write-Host "Installing jedi for code completion..."
-        & ".\\Python\\python.exe" -m pip install "jedi>=0.19.0" --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ jedi installed successfully"
-          
-          # Verify installation
-          $jediCheck = & ".\\Python\\python.exe" -c "import jedi; print('OK')" 2>$null
-          if ($jediCheck -eq "OK") {
-            Write-Host "✓ jedi verification successful"
-          } else {
-            Write-Host "⚠ Warning: jedi verification failed"
-          }
-        } else {
-          Write-Host "⚠ Warning: jedi installation failed"
-        }
-        
-    - name: Install Serial Port Packages
-      run: |
-        Write-Host "Installing pyserial and adafruit-board-toolkit for serial port detection..."
-        & ".\\Python\\python.exe" -m pip install pyserial==3.5 "adafruit-board-toolkit>=1.1.0" --no-warn-script-location
-        
-        if ($LASTEXITCODE -eq 0) {
-          Write-Host "✓ Serial port packages installed successfully"
-          
-          # Verify installation
-          $serialCheck = & ".\\Python\\python.exe" -c "import serial; import adafruit_board_toolkit; print('OK')" 2>$null
-          if ($serialCheck -eq "OK") {
-            Write-Host "✓ Serial port packages verification successful"
-          } else {
-            Write-Host "⚠ Warning: Serial port packages verification failed"
-          }
-        } else {
-          Write-Host "⚠ Warning: Serial port packages installation failed"
-        }
-        
-    - name: Ensure sched.py exists
-      run: |
-        # Autosave plugin needs sched.py which is missing in embeddable python
-        $hostSched = python -c "import sched; print(sched.__file__)"
-        Write-Host "Found host sched.py at: $hostSched"
-        
-        if (Test-Path $hostSched) {
-          Copy-Item $hostSched -Destination "Python\sched.py" -Force
-          Write-Host "✓ Copied sched.py to bundled Python"
-        } else {
-          Write-Host "⚠ Warning: Could not find host sched.py"
-        }
-        
-
-        
-    - name: Download Qt Designer
-      run: |
-        Write-Host "Attempting to download Qt Designer..."
-        
-        # For CI builds, Qt Designer is REQUIRED and must be pre-uploaded to GitHub Releases
-        $qtDesignerUrl = "https://github.com/walidroid/thonnysc/releases/download/qt-designer/qt-designer.zip"
-        
-        Write-Host "Downloading Qt Designer from releases..."
-        try {
-          Invoke-WebRequest $qtDesignerUrl -Out "qt-designer.zip"
-        } catch {
-          Write-Host "❌ CRITICAL ERROR: Failed to download Qt Designer"
-          Write-Host "Error: $($_.Exception.Message)"
-          Write-Host ""
-          Write-Host "=========================================="
-          Write-Host "Build cannot proceed without Qt Designer"
-          Write-Host "=========================================="
-          Write-Host "Please ensure:"
-          Write-Host "1. Release tag 'qt-designer' exists at:"
-          Write-Host "   https://github.com/walidroid/thonnysc/releases/tag/qt-designer"
-          Write-Host "2. qt-designer.zip is uploaded to that release"
-          Write-Host "3. File is public and accessible"
-          Write-Host "=========================================="
-          exit 1
-        }
-        
-        # Verify download
-        if (-not (Test-Path "qt-designer.zip")) {
-          Write-Host "❌ CRITICAL ERROR: qt-designer.zip not found after download"
-          exit 1
-        }
-        
-        Write-Host "Extracting Qt Designer..."
-        Expand-Archive "qt-designer.zip" -DestinationPath "." -Force
-        Remove-Item "qt-designer.zip"
-        
-        # Verify extraction
-        if (-not (Test-Path "Qt Designer\designer.exe")) {
-          Write-Host "❌ CRITICAL ERROR: designer.exe not found after extraction"
-          Write-Host "Qt Designer directory contents:"
-          Get-ChildItem "Qt Designer" -Recurse | Select-Object FullName
-          exit 1
-        }
-        
-        Write-Host "✓ Qt Designer downloaded and extracted successfully"
-        
-    - name: Clean up incompatible plugins
-      run: |
-        Write-Host "Cleaning up incompatible plugins..."
-        
-        # Remove thonny_friendly (incompatible API)
-        if (Test-Path "thonnycontrib\thonny_friendly") {
-          Remove-Item "thonnycontrib\thonny_friendly" -Recurse -Force
-          Write-Host "✓ Removed incompatible thonny_friendly plugin"
-        }
-        
-        # Remove thonny-autosave (missing stdlib dependency)
-        if (Test-Path "thonnycontrib\thonny-autosave") {
-          Remove-Item "thonnycontrib\thonny-autosave" -Recurse -Force
-          Write-Host "✓ Removed thonny-autosave plugin"
-        }
-        
-    - name: Remove unused locale directories
-      run: |
-        Write-Host "Removing unused locale directories (keeping only fr_FR and en_US)..."
-        $localeDir = "thonny\locale"
-        if (Test-Path $localeDir) {
-          $keepDirs = @("fr_FR", "en_US")
-          Get-ChildItem $localeDir -Directory | Where-Object { $_.Name -notin $keepDirs } | ForEach-Object {
-            Remove-Item $_.FullName -Recurse -Force
-            Write-Host "  Removed locale: $($_.Name)"
-          }
-          Write-Host "✓ Locale cleanup complete. Remaining:"
-          Get-ChildItem $localeDir -Directory | ForEach-Object { Write-Host "  - $($_.Name)" }
-        }
-        
-    - name: Build EXE with PyInstaller
-      run: |
-        pyinstaller thonny.spec
-        
-    - name: Copy local plugins to dist
-      run: |
-        # Ensure vendored plugins are in the distribution folder
-        Write-Host "Copying local plugins to dist/Thonny..."
-        if (Test-Path "local_plugins\thonnycontrib") {
-            $dest = "dist\Thonny\thonnycontrib"
-            if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-            Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest -Recurse -Force
-            Write-Host "✓ Copied local plugins to $dest"
-        } else {
-            Write-Host "⚠ Warning: local_plugins\thonnycontrib not found"
-        }
-        
     - name: Install Inno Setup
       run: |
         choco install innosetup -y
         
-    - name: Compile installer with Inno Setup
+    - name: Generate version number
+      id: version
       run: |
-        $version = "${{ steps.version.outputs.VERSION }}"
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version installer.iss
+        $date = Get-Date
+        $version = "$($date.Year).$($date.Month).$($date.Day).${{ github.run_number }}"
+        "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "Generated version: $version"
         
-    - name: Rename installer
+    - name: Run Build Script
       run: |
-        Move-Item -Path "output\ThonnySc_v${{ steps.version.outputs.VERSION }}.exe" -Destination "output\${{ steps.version.outputs.VERSION_FILE }}"
+        .\build.ps1 -Version "${{ steps.version.outputs.VERSION }}"
         
     - name: List output directory
       run: |
-        dir output
+        if (Test-Path "output") { dir output }
         
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
         name: ThonnySc-Installer-v${{ steps.version.outputs.VERSION }}
-        path: output/${{ steps.version.outputs.VERSION_FILE }}
+        path: output/*.exe
         retention-days: 30
         
     - name: Create Release
@@ -333,20 +60,11 @@ jobs:
           **Build Date:** ${{ github.event.head_commit.timestamp }}
           **Commit:** ${{ github.sha }}
           
-          ### Changes
-          ${{ github.event.head_commit.message }}
-          
           ### Installation
-          1. Download `${{ steps.version.outputs.VERSION_FILE }}` below
+          1. Download the executable below
           2. Run the installer
-          3. Desktop shortcuts for ThonnySc and Qt Designer will be created automatically
-          
-          ### Features
-          - ✅ Automatic desktop shortcuts for ThonnySc
-          - ✅ Automatic desktop shortcuts for Qt Designer (if bundled)
-          - ✅ French and English language support
-          - ✅ All dependencies included
-        files: output/${{ steps.version.outputs.VERSION_FILE }}
+          3. Desktop shortcuts will be created automatically
+        files: output/*.exe
         draft: false
         prerelease: false
       env:
