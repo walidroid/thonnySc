@@ -4,7 +4,11 @@ import sys
 import time
 from logging import getLogger
 from textwrap import dedent
-from tkinter import messagebox, ttk
+try:
+    from tkinter import messagebox, ttk
+except ImportError:
+    messagebox = None  # type: ignore[assignment]
+    ttk = None  # type: ignore[assignment]
 from typing import Any, Dict, List, Optional, Tuple
 
 from thonny import get_runner, get_shell, get_workbench, running, ui_utils
