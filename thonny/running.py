@@ -1581,6 +1581,26 @@ def get_environment_overrides_for_python_subprocess(target_executable):
         except Exception:
             logger.exception("Can't compute Tcl/Tk library location")
 
+    # When running as a frozen PyInstaller bundle, ensure Tcl/Tk paths are always
+    # forwarded to backend subprocesses (they need tkinter too, e.g. for mp_front imports).
+    # launch_thonny.py sets these in os.environ, but only if the envvars weren't already
+    # present — the existing loop above forwards them if set. This block is a safety net
+    # that queries Tk directly when not already resolved.
+    if getattr(sys, "frozen", False):
+        try:
+            if "TCL_LIBRARY" not in result:
+                result["TCL_LIBRARY"] = (
+                    os.environ.get("TCL_LIBRARY")
+                    or get_workbench().tk.exprstring("$tcl_library")
+                )
+            if "TK_LIBRARY" not in result:
+                result["TK_LIBRARY"] = (
+                    os.environ.get("TK_LIBRARY")
+                    or get_workbench().tk.exprstring("$tk_library")
+                )
+        except Exception:
+            logger.exception("Can't compute Tcl/Tk library location for frozen bundle")
+
     return result
 
 

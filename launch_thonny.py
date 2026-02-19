@@ -3,45 +3,54 @@ import os
 
 # Auto-detect and set Tcl/Tk library paths if needed
 def setup_tcl_tk():
-    """Configure Tcl/Tk environment for tkinter"""
-    if sys.platform == "win32":
-        # Build list of candidate directories to search for tcl/
-        candidates = []
-        
-        # 1. Directory of sys.executable (may be a symlink/junction)
-        python_dir = os.path.dirname(sys.executable)
-        candidates.append(python_dir)
-        
-        # 2. Resolve symlinks/junctions to find real path
-        real_python_dir = os.path.dirname(os.path.realpath(sys.executable))
-        if real_python_dir != python_dir:
-            candidates.append(real_python_dir)
-        
-        # 3. Common Windows Python install locations
-        home = os.path.expanduser("~")
-        for ver in ["Python314", "Python313", "Python312", "Python311"]:
-            candidates.append(os.path.join(home, "AppData", "Local", "Programs", "Python", ver))
-            candidates.append(os.path.join("C:\\", ver))
-        
-        # Search candidates for tcl/ directory
-        for python_dir in candidates:
-            tcl_dir = os.path.join(python_dir, "tcl")
-            if os.path.exists(tcl_dir):
-                for item in os.listdir(tcl_dir):
-                    item_path = os.path.join(tcl_dir, item)
-                    if os.path.isdir(item_path):
-                        if item.startswith("tcl8.") and "TCL_LIBRARY" not in os.environ:
-                            os.environ["TCL_LIBRARY"] = item_path
-                            print(f"DEBUG: Set TCL_LIBRARY={item_path}")
-                        elif item.startswith("tk8.") and "TK_LIBRARY" not in os.environ:
-                            os.environ["TK_LIBRARY"] = item_path
-                            print(f"DEBUG: Set TK_LIBRARY={item_path}")
-                # Stop searching if we found both
-                if "TCL_LIBRARY" in os.environ and "TK_LIBRARY" in os.environ:
-                    break
+    """Configure Tcl/Tk environment for tkinter in frozen (PyInstaller) bundles."""
+    if sys.platform != "win32":
+        return
+
+    # Already set — nothing to do
+    if "TCL_LIBRARY" in os.environ and "TK_LIBRARY" in os.environ:
+        return
+
+    # Candidate base directories to search
+    candidates = []
+
+    # 1. PyInstaller frozen bundle: _internal folder next to the EXE
+    if getattr(sys, "frozen", False):
+        internal_dir = os.path.join(os.path.dirname(sys.executable), "_internal")
+        if os.path.isdir(internal_dir):
+            candidates.append(internal_dir)
+
+    # 2. Directory of sys.executable (standard Python install or _internal itself)
+    candidates.append(os.path.dirname(sys.executable))
+    real_dir = os.path.dirname(os.path.realpath(sys.executable))
+    if real_dir not in candidates:
+        candidates.append(real_dir)
+
+    for base_dir in candidates:
+        # PyInstaller layout: tcl8/ and _tk_data/ directly inside _internal
+        # Standard layout: tcl/tcl8.x/ and tcl/tk8.x/ inside python dir
+        search_dirs = [base_dir, os.path.join(base_dir, "tcl")]
+
+        for search_dir in search_dirs:
+            if not os.path.isdir(search_dir):
+                continue
+            for item in os.listdir(search_dir):
+                item_path = os.path.join(search_dir, item)
+                if not os.path.isdir(item_path):
+                    continue
+                # Match tcl8, tcl8.6, tcl8.x etc.
+                if item.startswith("tcl8") and "TCL_LIBRARY" not in os.environ:
+                    os.environ["TCL_LIBRARY"] = item_path
+                # Match tk8, tk8.6, _tk_data etc.
+                if (item.startswith("tk8") or item == "_tk_data") and "TK_LIBRARY" not in os.environ:
+                    os.environ["TK_LIBRARY"] = item_path
+
+        if "TCL_LIBRARY" in os.environ and "TK_LIBRARY" in os.environ:
+            break
 
 # Set up Tcl/Tk before importing thonny
 setup_tcl_tk()
+
 
 # Absolute path to this project root
 project_root = os.path.dirname(os.path.abspath(__file__))
