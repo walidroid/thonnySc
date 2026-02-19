@@ -8,9 +8,13 @@ VIDS_PIDS_TO_AVOID_IN_ESP_BACKENDS = set()
 def load_plugin():
     from typing import List
 
-    from thonny.plugins.micropython import BareMetalMicroPythonConfigPage, BareMetalMicroPythonProxy
+    from thonny.plugins.micropython.mp_front import (
+        BareMetalMicroPythonConfigPage,
+        BareMetalMicroPythonProxy,
+        add_micropython_backend,
+        get_uart_adapter_vids_pids,
+    )
     from thonny.plugins.micropython.esptool_dialog import try_launch_esptool_dialog
-    from thonny.plugins.micropython.mp_front import add_micropython_backend, get_uart_adapter_vids_pids
     from thonny.plugins.micropython.uf2dialog import show_uf2_installer
 
     class ESPProxy(BareMetalMicroPythonProxy):
