@@ -1582,12 +1582,25 @@ def get_environment_overrides_for_python_subprocess(target_executable):
             logger.exception("Can't compute Tcl/Tk library location")
 
     # When running as a frozen PyInstaller bundle, ensure Tcl/Tk paths are always
-    # forwarded to backend subprocesses (they need tkinter too, e.g. for mp_front imports).
-    # launch_thonny.py sets these in os.environ, but only if the envvars weren't already
-    # present — the existing loop above forwards them if set. This block is a safety net
-    # that queries Tk directly when not already resolved.
-    if getattr(sys, "frozen", False):
+    # forwarded to backend subprocesses.
+    #
+    # The backend subprocess uses Python/python.exe (embeddable Python). During build,
+    # tkinter files are copied to:
+    #   Python/tcl/tcl8.6/  →  TCL_LIBRARY
+    #   Python/tcl/tk8.6/   →  TK_LIBRARY
+    #
+    # We compute these paths relative to the target executable
+    # (e.g. ...ThonnySc\Python\python.exe → ...ThonnySc\Python\tcl\tcl8.6)
+    if getattr(sys, "frozen", False) and "TCL_LIBRARY" not in result:
         try:
+            target_dir = os.path.dirname(target_executable.replace("pythonw.exe", "python.exe"))
+            tcl_candidate = os.path.join(target_dir, "tcl", "tcl8.6")
+            tk_candidate = os.path.join(target_dir, "tcl", "tk8.6")
+            if os.path.isdir(tcl_candidate):
+                result["TCL_LIBRARY"] = tcl_candidate
+            if os.path.isdir(tk_candidate):
+                result["TK_LIBRARY"] = tk_candidate
+            # Fallback: query from live Tk instance (works if TCL was found via _internal/)
             if "TCL_LIBRARY" not in result:
                 result["TCL_LIBRARY"] = (
                     os.environ.get("TCL_LIBRARY")
