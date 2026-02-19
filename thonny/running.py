@@ -14,14 +14,21 @@ import shlex
 import subprocess
 import sys
 import time
-import tkinter as tk
+try:
+    import tkinter as tk
+except ImportError:
+    tk = None  # type: ignore[assignment]
 import traceback
 import warnings
 from abc import ABC, abstractmethod
 from logging import getLogger
 from threading import Thread
 from time import sleep
-from tkinter import messagebox, ttk
+try:
+    from tkinter import messagebox, ttk
+except ImportError:
+    messagebox = None  # type: ignore[assignment]
+    ttk = None  # type: ignore[assignment]
 from typing import Any, Callable, Dict, List, Optional, Set, Union  # @UnusedImport; @UnusedImport
 
 import thonny
@@ -56,14 +63,7 @@ from thonny.common import (
     universal_relpath,
     update_system_path,
 )
-from thonny.editors import (
-    extract_target_path,
-    get_current_breakpoints,
-    get_saved_current_script_filename,
-    get_target_dirname_from_editor_filename,
-    is_local_path,
-    is_remote_path,
-)
+
 from thonny.languages import tr
 from thonny.misc_utils import (
     construct_cmd_line,
@@ -72,8 +72,8 @@ from thonny.misc_utils import (
     running_on_windows,
     show_command_not_available_in_flatpak_message,
 )
-from thonny.ui_utils import select_sequence, show_dialog
-from thonny.workdlg import WorkDialog
+
+
 
 logger = getLogger(__name__)
 

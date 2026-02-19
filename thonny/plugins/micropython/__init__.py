@@ -2,22 +2,27 @@ import platform
 
 from thonny import get_workbench
 from thonny.languages import tr
-from thonny.plugins.micropython.mp_front import (
-    BareMetalMicroPythonConfigPage,
-    BareMetalMicroPythonProxy,
-    GenericBareMetalMicroPythonConfigPage,
-    GenericBareMetalMicroPythonProxy,
-    LocalMicroPythonConfigPage,
-    LocalMicroPythonProxy,
-    MicroPythonProxy,
-    SshMicroPythonConfigPage,
-    SshMicroPythonProxy,
-    add_micropython_backend,
-    list_serial_ports,
-)
 
 
 def load_plugin():
+    # Lazy import: only load GUI/frontend modules when the plugin is actually
+    # being loaded into the Thonny GUI. This prevents the tkinter import from
+    # crashing the headless backend subprocess, which imports bare_metal_backend
+    # and thus initializes this package without needing any GUI code.
+    from thonny.plugins.micropython.mp_front import (
+        BareMetalMicroPythonConfigPage,
+        BareMetalMicroPythonProxy,
+        GenericBareMetalMicroPythonConfigPage,
+        GenericBareMetalMicroPythonProxy,
+        LocalMicroPythonConfigPage,
+        LocalMicroPythonProxy,
+        MicroPythonProxy,
+        SshMicroPythonConfigPage,
+        SshMicroPythonProxy,
+        add_micropython_backend,
+        list_serial_ports,
+    )
+
     add_micropython_backend(
         "GenericMicroPython",
         GenericBareMetalMicroPythonProxy,
