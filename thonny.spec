@@ -54,6 +54,7 @@ a = Analysis(
     datas=[
         ('thonny', 'thonny'),
         ('local_plugins/thonnycontrib', 'thonnycontrib'),  # Include fixed plugins
+        ('buttons', 'buttons'),  # Qt Designer toolbar button image
     ] + metadata_datas + qt_datas,
     hiddenimports=[
         'tkinter',
@@ -69,6 +70,7 @@ a = Analysis(
         'thonnycontrib.thonny_simple_autocomplete',
         'thonnycontrib.thonny_autosave',
         'thonnycontrib.thonny_quick_switch',
+        'thonnycontrib.thonny_qt_designer',
         'pkg_resources.py2_warn',
         # Code completion
         'jedi',

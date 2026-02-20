@@ -62,7 +62,22 @@ from thonny.common import (
     serialize_message,
     universal_relpath,
     update_system_path,
+    is_remote_path,
+    is_local_path,
 )
+
+try:
+    from thonny.editors import (
+        extract_target_path,
+        get_current_breakpoints,
+        get_saved_current_script_filename,
+        get_target_dirname_from_editor_filename,
+    )
+except ImportError:
+    extract_target_path = None  # type: ignore[assignment]
+    get_current_breakpoints = None  # type: ignore[assignment]
+    get_saved_current_script_filename = None  # type: ignore[assignment]
+    get_target_dirname_from_editor_filename = None  # type: ignore[assignment]
 
 from thonny.languages import tr
 from thonny.misc_utils import (
