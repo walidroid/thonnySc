@@ -72,8 +72,13 @@ from thonny.misc_utils import (
     running_on_windows,
     show_command_not_available_in_flatpak_message,
 )
-
-
+try:
+    from thonny.ui_utils import select_sequence, show_dialog
+    from thonny.workdlg import WorkDialog
+except ImportError:
+    select_sequence = None  # type: ignore[assignment]
+    show_dialog = None  # type: ignore[assignment]
+    WorkDialog = object  # type: ignore[assignment,misc]
 
 logger = getLogger(__name__)
 
