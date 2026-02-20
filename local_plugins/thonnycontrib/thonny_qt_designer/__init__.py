@@ -111,7 +111,13 @@ def load_plugin():
 
     img_path = os.path.join(buttons_dir, "button_qt-designer.png")
     if os.path.isfile(img_path):
-        wb.get_image(img_path, "qt-designer")
+        try:
+            wb.get_image(img_path, "qt-designer")
+        except KeyError:
+            # Theme mapping may not be initialized yet at plugin load time;
+            # register the image after the workbench is fully set up.
+            logger.debug("get_image called before theme was initialized; deferring image registration.")
+            wb.after(100, lambda: wb.get_image(img_path, "qt-designer"))
 
     # Add Tools > Qt Designer menu command
     wb.add_command(
