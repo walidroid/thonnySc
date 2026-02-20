@@ -1657,7 +1657,10 @@ class Workbench(tk.Tk):
     def get_image(
         self, filename: str, tk_name: Optional[str] = None, disabled=False
     ) -> tk.PhotoImage:
-        if filename in self._image_mapping_by_theme[self._current_theme_name]:
+        if (
+            self._current_theme_name in self._image_mapping_by_theme
+            and filename in self._image_mapping_by_theme[self._current_theme_name]
+        ):
             filename = self._image_mapping_by_theme[self._current_theme_name][filename]
 
         if filename in self._default_image_mapping:
@@ -1718,7 +1721,10 @@ class Workbench(tk.Tk):
 
     def get_toolbar_image(self, filename: str, tk_name: Optional[str] = None, disabled=False) -> tk.PhotoImage:
         """Get image for toolbar buttons, always using 2x scaling for larger buttons."""
-        if filename in self._image_mapping_by_theme[self._current_theme_name]:
+        if (
+            self._current_theme_name in self._image_mapping_by_theme
+            and filename in self._image_mapping_by_theme[self._current_theme_name]
+        ):
             filename = self._image_mapping_by_theme[self._current_theme_name][filename]
 
         if filename in self._default_image_mapping:

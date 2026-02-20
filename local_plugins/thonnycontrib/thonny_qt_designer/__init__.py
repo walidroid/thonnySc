@@ -117,7 +117,13 @@ def load_plugin():
             # Theme mapping may not be initialized yet at plugin load time;
             # register the image after the workbench is fully set up.
             logger.debug("get_image called before theme was initialized; deferring image registration.")
-            wb.after(100, lambda: wb.get_image(img_path, "qt-designer"))
+            def deferred_registration():
+                try:
+                    wb.get_image(img_path, "qt-designer")
+                except Exception:
+                    logger.debug("Deferred get_image failed")
+
+            wb.after(100, deferred_registration)
 
     # Add Tools > Qt Designer menu command
     wb.add_command(
@@ -127,5 +133,5 @@ def load_plugin():
         handler=_launch_designer,
         image="qt-designer",
         include_in_toolbar=True,
-        toolbar_group=110,
+        group=110,
     )
