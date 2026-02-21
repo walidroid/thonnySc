@@ -118,6 +118,6 @@ def load_plugin():
         caption="Qt Designer",
         handler=_launch_designer,
         image=img_path if os.path.isfile(img_path) else None,
-        include_in_toolbar=True,
+        include_in_toolbar=False,
         group=110,
     )

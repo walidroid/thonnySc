@@ -51,7 +51,7 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: ThonnySc-installer-${{ steps.version.outputs.version }}
+          name: ThonnySc-installer-${{ steps.version.outputs.version }}.zip
           path: |
             output\ThonnySc_v${{ steps.version.outputs.version }}.exe
             dist\Thonny\**

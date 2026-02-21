@@ -48,6 +48,7 @@ Key Features
 🔧 **Extensible Plugin System**
    - Auto-save functionality
    - Quick file switching
+   - Auto-completion snippets
    - Error translation
    - Custom themes
 

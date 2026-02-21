@@ -11,18 +11,18 @@ from xml.dom import minidom
 global qt_ui_file
 qt_ui_file =""
 
-def usefull_commands(w):
-    def add_cmd(w ,id, label , fct ):
-        get_workbench()._publish_command(
-                    "pyqt_text_"+w.attributes['name'].value+id,
-                    "pyqt5",
-                    label +w.attributes['name'].value ,
-                    lambda: get_workbench().get_editor_notebook().get_current_editor().get_code_view().text.insert('insert',"windows."+w.attributes['name'].value +fct)
-                )
-    add_cmd(w,"text","Contenu de ",".text()")
-    add_cmd(w,"settext","Changer le contenu de ",".setText()")
-    add_cmd(w,"clear","Effacer le contenu de ",".clear()")
-    add_cmd(w,"show","Afficher ",".show()")
+# def usefull_commands(w):
+#     def add_cmd(w ,id, label , fct ):
+#         get_workbench()._publish_command(
+#                     "pyqt_text_"+w.attributes['name'].value+id,
+#                     "pyqt5",
+#                     label +w.attributes['name'].value ,
+#                     lambda: get_workbench().get_editor_notebook().get_current_editor().get_code_view().text.insert('insert',"windows."+w.attributes['name'].value +fct)
+#                 )
+#     add_cmd(w,"text","Contenu de ",".text()")
+#     add_cmd(w,"settext","Changer le contenu de ",".setText()")
+#     add_cmd(w,"clear","Effacer le contenu de ",".clear()")
+#     add_cmd(w,"show","Afficher ",".show()")
 
     
     
@@ -46,8 +46,7 @@ def add_pyqt_code():
                 btnstxt = btnstxt + "windows."+w.attributes['name'].value +".clicked.connect ( "+  w.attributes['name'].value +"_click )\n"
                 mytxt = mytxt + "def "+  w.attributes['name'].value +"_click():\n    pass\n" 
             elif w.attributes['class'].value in [ "QLineEdit", "QLabel"] : #Zone de texte ou Libellé
-                #btnstxt = btnstxt + "windows."+w.attributes['name'].value +".clicked.connect ( "+  w.attributes['name'].value +"_click )"+chr(13)+chr(10)
-                usefull_commands(w)
+                pass
                 
             
 
