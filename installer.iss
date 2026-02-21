@@ -65,8 +65,8 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\Qt Designer"; Filename: "{app}\Python\Lib\site-packages\qt5_applications\Qt\bin\designer.exe"
 
 [Run]
-Filename: "{app}\drivers\CP210xVCPInstaller_x64.exe"; Parameters: "/quiet /qn /se /q"; WorkingDir: "{app}\drivers"; StatusMsg: "Installation des pilotes ESP32 ..."; Tasks:InstallESP32Driver; Check: Is64BitInstallMode; Flags: skipifdoesntexist
-Filename: "{app}\drivers\CP210xVCPInstaller_x86.exe"; Parameters: "/quiet /qn /se /q"; WorkingDir: "{app}\drivers"; StatusMsg: "Installation des pilotes ESP32 ..."; Tasks:InstallESP32Driver; Check: not Is64BitInstallMode; Flags: skipifdoesntexist
+Filename: "{app}\drivers\CP210xVCPInstaller_x64.exe"; Parameters: "/S /SE"; WorkingDir: "{app}\drivers"; StatusMsg: "Installation des pilotes ESP32 ..."; Tasks:InstallESP32Driver; Check: Is64BitInstallMode; Flags: skipifdoesntexist
+Filename: "{app}\drivers\CP210xVCPInstaller_x86.exe"; Parameters: "/S /SE"; WorkingDir: "{app}\drivers"; StatusMsg: "Installation des pilotes ESP32 ..."; Tasks:InstallESP32Driver; Check: not Is64BitInstallMode; Flags: skipifdoesntexist
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
