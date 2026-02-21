@@ -294,8 +294,16 @@ if (Test-Path $localeDir) {
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
 
 # Install dependencies into System Python for PyInstaller visibility
-Write-Host "Installing dependencies into System Python (required for PyInstaller bundling)..."
-if (Get-Command "py" -ErrorAction SilentlyContinue) {
+Write-Host "Installing dependencies using local virtual environment (required for PyInstaller bundling)..."
+$venvPython = ".\venv\Scripts\python.exe"
+
+if (Test-Path $venvPython) {
+    Write-Host "Using 'venv' Python..."
+    & $venvPython -m pip install -r requirements.txt --no-warn-script-location
+    & $venvPython -m pip install pyinstaller --no-warn-script-location
+    Write-Host "Running PyInstaller..."
+    & $venvPython -m PyInstaller thonny.spec
+} elseif (Get-Command "py" -ErrorAction SilentlyContinue) {
     Write-Host "Using 'py' launcher..."
     py -3 -m pip install -r requirements.txt --no-warn-script-location
     py -3 -m pip install pyinstaller --no-warn-script-location
@@ -308,7 +316,7 @@ if (Get-Command "py" -ErrorAction SilentlyContinue) {
     Write-Host "Running PyInstaller..."
     python -m PyInstaller thonny.spec
 } else {
-    Write-Host "CRITICAL WARNING: System Python not found. PyInstaller might fail or use wrong environment!" -ForegroundColor Red
+    Write-Host "CRITICAL WARNING: Python not found. PyInstaller might fail or use wrong environment!" -ForegroundColor Red
     # Fallback to direct command if it exists
     pyinstaller thonny.spec
 }
