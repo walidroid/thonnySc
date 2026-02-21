@@ -1,7 +1,7 @@
 from logging import getLogger
 from typing import List
 
-from thonny.plugins.micropython import BareMetalMicroPythonConfigPage, BareMetalMicroPythonProxy
+from thonny.plugins.micropython.mp_front import BareMetalMicroPythonConfigPage, BareMetalMicroPythonProxy
 from thonny.plugins.micropython.esptool_dialog import try_launch_esptool_dialog
 
 # from thonny.plugins.micropython.esptool_dialog import try_launch_esptool_dialog
