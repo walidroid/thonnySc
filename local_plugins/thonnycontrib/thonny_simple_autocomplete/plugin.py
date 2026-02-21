@@ -11,9 +11,10 @@ def init_plugin():
     
     wb.bind("WorkbenchReady", on_ready)
     wb.bind("EditorTextCreated", on_editor_created)
-    print("Plugin Snippets & Autoclose Intelligent charge")
+    print("Plugin Snippets & Autoclose Intelligent charge - DEBUG ENABLED")
 
 def on_ready(event):
+    print("thonny_simple_autocomplete: on_ready called")
     wb = get_workbench()
     editor_notebook = wb.get_editor_notebook()
     if editor_notebook:
@@ -24,6 +25,7 @@ def on_ready(event):
             disable_default_trigger(text_widget)
 
 def on_editor_created(event):
+    print("thonny_simple_autocomplete: on_editor_created called")
     bind_events(event.text_widget)
     disable_default_trigger(event.text_widget)
 
@@ -41,6 +43,7 @@ def disable_default_trigger(text_widget):
         pass
 
 def bind_events(text_widget):
+    print("thonny_simple_autocomplete: bind_events called")
     # --- 1. GESTION PRIORITAIRE (POUR BACKSPACE) ---
     # Thonny intercepte souvent BackSpace. Pour passer DEVANT lui, 
     # on ajoute un tag personnalisé en tout premier dans la liste des priorités.
