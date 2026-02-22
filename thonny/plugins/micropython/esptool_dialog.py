@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Tuple
 from thonny import get_runner, get_workbench, ui_utils
 from thonny.common import normpath_with_actual_case
 from thonny.misc_utils import get_menu_char, running_on_windows
-from thonny.plugins.micropython import BareMetalMicroPythonProxy, list_serial_ports
+from thonny.plugins.micropython.mp_front import BareMetalMicroPythonProxy, list_serial_ports
 from thonny.plugins.micropython.base_flashing_dialog import (
     BaseFlashingDialog,
     TargetInfo,

@@ -2,7 +2,7 @@ from logging import getLogger
 from typing import Optional
 
 from thonny import get_workbench, ui_utils
-from thonny.plugins.micropython import add_micropython_backend
+from thonny.plugins.micropython.mp_front import add_micropython_backend
 from thonny.plugins.micropython.mp_common import RAW_PASTE_SUBMIT_MODE
 from thonny.plugins.micropython.mp_front import get_uart_adapter_vids_pids
 from thonny.plugins.micropython.uf2dialog import Uf2FlashingDialog

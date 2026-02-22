@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from thonny import ui_utils, get_workbench
 from thonny.languages import tr
-from thonny.plugins.micropython import (
+from thonny.plugins.micropython.mp_front import (
     BareMetalMicroPythonConfigPage,
     BareMetalMicroPythonProxy,
     add_micropython_backend,
