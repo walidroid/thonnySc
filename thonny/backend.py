@@ -60,6 +60,12 @@ class BaseBackend(ABC):
         if sys.excepthook == sys.__excepthook__:
             sys.excepthook = self._custom_excepthook
 
+    def _init_command_reader(self):
+        # NB! This approach is used only in MicroPython and SshCPython backend.
+        # MainCPython backend uses main thread for reading commands
+        # https://github.com/thonny/thonny/issues/1363
+        threading.Thread(target=self._read_incoming_messages, daemon=True).start()
+
     def _custom_excepthook(self, exc_type, exc_value, exc_traceback):
         """Handle exceptions in backend, especially PyQt5 errors"""
         if exc_type.__name__ == 'SystemExit':
@@ -74,10 +80,6 @@ class BaseBackend(ABC):
         print("="*60, file=sys.stderr)
         traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
         print("="*60 + "\n", file=sys.stderr)
-        # NB! This approach is used only in MicroPython and SshCPython backend.
-        # MainCPython backend uses main thread for reading commands
-        # https://github.com/thonny/thonny/issues/1363
-        threading.Thread(target=self._read_incoming_messages, daemon=True).start()
 
     def mainloop(self):
         report_time("Beginning of mainloop")
