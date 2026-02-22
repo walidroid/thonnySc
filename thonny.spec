@@ -46,6 +46,8 @@ friendly_hiddenimports = []
 thonny_hiddenimports = collect_submodules('thonny')
 jedi_hiddenimports = collect_submodules('jedi')
 parso_hiddenimports = collect_submodules('parso')
+micropython_hiddenimports = collect_submodules('thonny.plugins.micropython')
+esp_hiddenimports = collect_submodules('thonny.plugins.esp')
 
 a = Analysis(
     ['thonny/__main__.py'],
@@ -91,7 +93,7 @@ a = Analysis(
         'PyQt5.QtCore',
         'PyQt5.QtWidgets',
         'PyQt5.uic',
-    ] + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + qt_hiddenimports,
+    ] + thonny_hiddenimports + jedi_hiddenimports + parso_hiddenimports + micropython_hiddenimports + esp_hiddenimports + qt_hiddenimports,
     hookspath=[os.path.abspath('.')],  # Use custom hooks from current directory
     hooksconfig={},
     runtime_hooks=[],
