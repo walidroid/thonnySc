@@ -316,7 +316,7 @@ jobs:
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ThonnySc-Installer-v${{ steps.version.outputs.VERSION }}.zip
+        name: ThonnySc-Installer-v${{ steps.version.outputs.VERSION }}
         path: output/${{ steps.version.outputs.VERSION_FILE }}
         retention-days: 30
         
