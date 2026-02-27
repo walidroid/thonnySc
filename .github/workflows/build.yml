@@ -48,9 +48,14 @@ jobs:
           foreach ($m in $mods) {
             & ".\Python\python.exe" -c "import $m; print('$m OK')" | Out-Host
           }
-      - name: Upload Installer
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v2
         with:
-          name: ThonnySc-installer-${{ steps.version.outputs.version }}
-          path: output\ThonnySc_v${{ steps.version.outputs.version }}.exe
-          if-no-files-found: warn
+          tag_name: v${{ steps.version.outputs.version }}
+          name: ThonnySc v${{ steps.version.outputs.version }}
+          files: output/ThonnySc_v${{ steps.version.outputs.version }}.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
