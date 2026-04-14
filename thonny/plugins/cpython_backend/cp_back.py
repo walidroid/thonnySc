@@ -1529,7 +1529,7 @@ def _format_student_message(e_type, e_value):
     if isinstance(e_value, NameError):
         match = re.search(r"name '(.+)' is not defined", message)
         if match:
-            return f"The name {match.group(1)} is not known yet."
+            return f'Name "{match.group(1)}" is not defined.'
         return "A variable or function name is not known."
 
     if isinstance(e_value, ZeroDivisionError):

@@ -1068,6 +1068,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         self.direct_insert("output_insert", txt, ("io_hyperlink", command_tag) + tuple(extra_tags))
         self.tag_bind(command_tag, "<1>", handler)
+        self.tag_bind(command_tag, "<ButtonRelease-1>", handler, True)
 
     def _insert_text_directly(self, txt, tags=()):
         def _insert(txt, tags):
@@ -1501,14 +1502,31 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             logger.exception("Could not handle hyperlink click", exc_info=e)
 
     def _show_user_exception(self, user_exception):
-        for line, frame_id, filename, lineno in user_exception.get(
-            "brief_items", user_exception["items"]
+        fallback_filename = user_exception.get("filename")
+        fallback_lineno = user_exception.get("lineno")
+
+        for index, (line, frame_id, filename, lineno) in enumerate(
+            user_exception.get("brief_items", user_exception["items"])
         ):
+            effective_filename = filename
+            effective_lineno = lineno
+            if (
+                index == 0
+                and line.startswith("Problem on line")
+                and effective_filename is None
+                and fallback_filename
+                and fallback_lineno
+            ):
+                effective_filename = fallback_filename
+                effective_lineno = fallback_lineno
+
             tags = ("io", "stderr")
-            if filename and lineno:
+            if effective_filename and effective_lineno:
                 tags += ("stacktrace_hyperlink",)
 
-                def handle_location_click(event, filename=filename, lineno=lineno):
+                def handle_location_click(
+                    event, filename=effective_filename, lineno=effective_lineno
+                ):
                     if (
                         filename in (STRING_PSEUDO_FILENAME, REPL_PSEUDO_FILENAME)
                         and self._last_main_file
