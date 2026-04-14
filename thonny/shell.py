@@ -1062,11 +1062,11 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         except Exception:
             return False
 
-    def _insert_command_link(self, txt, handler):
+    def _insert_command_link(self, txt, handler, extra_tags=()):
         self._link_handler_count += 1
         command_tag = "link_handler_%s" % self._link_handler_count
 
-        self.direct_insert("output_insert", txt, ("io_hyperlink", command_tag))
+        self.direct_insert("output_insert", txt, ("io_hyperlink", command_tag) + tuple(extra_tags))
         self.tag_bind(command_tag, "<1>", handler)
 
     def _insert_text_directly(self, txt, tags=()):
@@ -1501,9 +1501,27 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             logger.exception("Could not handle hyperlink click", exc_info=e)
 
     def _show_user_exception(self, user_exception):
-        for line, frame_id, *_ in user_exception.get("brief_items", user_exception["items"]):
+        for line, frame_id, filename, lineno in user_exception.get(
+            "brief_items", user_exception["items"]
+        ):
             tags = ("io", "stderr")
-            if frame_id is not None:
+            if filename and lineno:
+                tags += ("stacktrace_hyperlink",)
+
+                def handle_location_click(event, filename=filename, lineno=lineno):
+                    if (
+                        filename in (STRING_PSEUDO_FILENAME, REPL_PSEUDO_FILENAME)
+                        and self._last_main_file
+                    ):
+                        target_filename = self._last_main_file
+                    else:
+                        target_filename = os.path.expanduser(filename)
+
+                    get_workbench().get_editor_notebook().show_file_at_line(target_filename, lineno)
+                    return "break"
+
+                self._insert_command_link(line, handle_location_click, tags)
+            elif frame_id is not None:
                 frame_tag = "frame_%d" % frame_id
 
                 def handle_frame_click(event, frame_id=frame_id):
@@ -1513,8 +1531,9 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                 # TODO: put first line with frame tag and rest without
                 tags += (frame_tag,)
                 self.tag_bind(frame_tag, "<ButtonRelease-1>", handle_frame_click, True)
-
-            self._insert_text_directly(line, tags)
+                self._insert_text_directly(line, tags)
+            else:
+                self._insert_text_directly(line, tags)
 
     def _discard_old_content(self):
         max_lines = max(get_workbench().get_option("shell.max_lines"), 0)

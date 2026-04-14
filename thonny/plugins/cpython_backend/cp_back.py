@@ -1516,41 +1516,58 @@ def _format_student_message(e_type, e_value):
     if isinstance(e_value, IndentationError):
         lowered = getattr(e_value, "msg", message).lower()
         if "unindent does not match" in lowered:
-            return "Indentation error: this line is not aligned with the block above."
+            return "This line has wrong indentation."
         if "unexpected indent" in lowered:
-            return "Indentation error: this line has extra spaces at the beginning."
+            return "This line has extra spaces at the beginning."
         if "expected an indented block" in lowered:
-            return "Indentation error: Python expected an indented block here."
-        return "Indentation error: check the spaces at the beginning of this line."
+            return "Python expected an indented block here."
+        return "Check the spaces at the beginning of this line."
 
     if isinstance(e_value, SyntaxError):
-        detail = getattr(e_value, "msg", message).strip()
-        if detail:
-            return f"Syntax error: {detail}."
-        return "Syntax error: Python cannot understand this line."
+        return "Python cannot understand this line."
 
     if isinstance(e_value, NameError):
         match = re.search(r"name '(.+)' is not defined", message)
         if match:
-            return f"Name error: `{match.group(1)}` is used before it is defined."
-        return "Name error: a variable or function name is unknown."
+            return f"The name {match.group(1)} is not known yet."
+        return "A variable or function name is not known."
 
     if isinstance(e_value, ZeroDivisionError):
-        return "Math error: division by zero is not allowed."
+        return "You cannot divide by zero."
 
     if isinstance(e_value, IndexError):
-        return "Index error: you tried to access a list item that does not exist."
+        return "This list position does not exist."
 
     if isinstance(e_value, KeyError):
-        return f"Key error: {message}"
+        return "This key was not found."
 
     if isinstance(e_value, AttributeError):
-        return f"Attribute error: {message}"
+        return "This object does not have that attribute."
 
     if isinstance(e_value, TypeError):
-        return f"Type error: {message}"
+        return "These values cannot be used together in this operation."
 
-    return f"{e_type.__name__}: {message}"
+    return "Python found a problem while running this line."
+
+
+def _get_student_followup_line(e_value, code_line):
+    if not code_line:
+        return None
+
+    text = code_line.strip()
+    if not text:
+        return None
+
+    if isinstance(e_value, IndentationError):
+        return f"Check the spaces before {text}"
+
+    if isinstance(e_value, SyntaxError):
+        return f"Check this line: {text}"
+
+    if isinstance(e_value, NameError):
+        return f"Check the spelling in: {text}"
+
+    return f"Check this line: {text}"
 
 
 def format_student_friendly_exception(e_type, e_value, e_traceback):
@@ -1562,14 +1579,14 @@ def format_student_friendly_exception(e_type, e_value, e_traceback):
         code_line = (getattr(e_value, "text", None) or "").strip()
 
         if lineno:
-            items.append((f"Error in {os.path.basename(filename)}, line {lineno}\n", None, filename, lineno))
+            items.append((f"Problem on line {lineno}\n", None, filename, lineno))
         else:
-            items.append((f"Error in {os.path.basename(filename)}\n", None, filename, None))
-
-        if code_line:
-            items.append((f"Code: {code_line}\n", None, filename, lineno))
+            items.append((f"Problem in {os.path.basename(filename)}\n", None, filename, None))
 
         items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
+        followup = _get_student_followup_line(e_value, code_line)
+        if followup:
+            items.append((followup + "\n", None, filename, lineno))
         return items
 
     entry, frame_id = _get_relevant_exception_entry(e_value, e_traceback)
@@ -1577,16 +1594,18 @@ def format_student_friendly_exception(e_type, e_value, e_traceback):
     if entry is not None:
         items.append(
             (
-                f"Error in {os.path.basename(entry.filename)}, line {entry.lineno}\n",
+                f"Problem on line {entry.lineno}\n",
                 frame_id,
                 entry.filename,
                 entry.lineno,
             )
         )
-        if entry.line:
-            items.append((f"Code: {entry.line.strip()}\n", frame_id, entry.filename, entry.lineno))
 
     items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
+    if entry is not None:
+        followup = _get_student_followup_line(e_value, entry.line or "")
+        if followup:
+            items.append((followup + "\n", frame_id, entry.filename, entry.lineno))
     return items
 
 
