@@ -1073,6 +1073,7 @@ class MainCPythonBackend(MainBackend):
             "type_name": e_type.__name__,
             "message": msg,
             "stack": self._export_stack(last_frame),
+            "brief_items": format_student_friendly_exception(e_type, e_value, e_traceback),
             "items": format_exception_with_frame_info(e_type, e_value, e_traceback),
             "filename": getattr(e_value, "filename", processed_tb[-1].filename),
             "lineno": getattr(e_value, "lineno", processed_tb[-1].lineno),
@@ -1305,17 +1306,7 @@ class Executor:
                 raise ValueError("Unknown mode", mode)
 
             return self._execute_prepared_user_code(statements, global_vars)
-        except SyntaxError as e:
-            import sys
-            try:
-                print(f"  File \"{e.filename}\", line {e.lineno}", file=sys.stderr)
-                if e.text:
-                    print(f"    {e.text.strip()}", file=sys.stderr)
-                    if e.offset:
-                        print(f"    {' ' * (e.offset - 1)}^", file=sys.stderr)
-                print(f"SyntaxError: {e.msg}", file=sys.stderr)
-            except Exception:
-                pass
+        except SyntaxError:
             return {"user_exception": self._backend._prepare_user_exception()}
 
     @return_execution_result
@@ -1332,13 +1323,11 @@ class Executor:
                     except AttributeError:
                         code = 0
                     sys.exit(code)
-                
-                import traceback
-                print("\n" + "="*60, file=sys.stderr)
-                print("CPython Backend Error:", file=sys.stderr)
-                print("="*60, file=sys.stderr)
-                traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
-                print("="*60 + "\n", file=sys.stderr)
+
+                for line, _, _, _ in format_student_friendly_exception(
+                    exc_type, exc_value, exc_traceback
+                ):
+                    print(line, end="", file=sys.stderr)
             
             # Temporary replace excepthook
             old_excepthook = sys.excepthook
@@ -1492,6 +1481,113 @@ def format_exception_with_frame_info(e_type, e_value, e_traceback, shorten_filen
     items = rec_format_exception_with_frame_info(e_type, e_value, e_traceback)
 
     return list(items)
+
+
+def _get_relevant_exception_entry(e_value, e_traceback):
+    if e_traceback is None:
+        return None, None
+
+    tb_temp = e_traceback
+    last_relevant_entry = None
+    last_relevant_frame_id = None
+
+    for entry in traceback.extract_tb(e_traceback):
+        assert tb_temp is not None
+        if (
+            "cpython_backend" not in entry.filename
+            and "thonny/backend" not in entry.filename.replace("\\", "/")
+            and (
+                not entry.filename.endswith(os.sep + "ast.py")
+                or entry.name != "parse"
+                or not isinstance(e_value, SyntaxError)
+            )
+        ):
+            last_relevant_entry = entry
+            last_relevant_frame_id = id(tb_temp.tb_frame)
+
+        tb_temp = tb_temp.tb_next
+
+    return last_relevant_entry, last_relevant_frame_id
+
+
+def _format_student_message(e_type, e_value):
+    message = str(e_value).strip() or e_type.__name__
+
+    if isinstance(e_value, IndentationError):
+        lowered = getattr(e_value, "msg", message).lower()
+        if "unindent does not match" in lowered:
+            return "Indentation error: this line is not aligned with the block above."
+        if "unexpected indent" in lowered:
+            return "Indentation error: this line has extra spaces at the beginning."
+        if "expected an indented block" in lowered:
+            return "Indentation error: Python expected an indented block here."
+        return "Indentation error: check the spaces at the beginning of this line."
+
+    if isinstance(e_value, SyntaxError):
+        detail = getattr(e_value, "msg", message).strip()
+        if detail:
+            return f"Syntax error: {detail}."
+        return "Syntax error: Python cannot understand this line."
+
+    if isinstance(e_value, NameError):
+        match = re.search(r"name '(.+)' is not defined", message)
+        if match:
+            return f"Name error: `{match.group(1)}` is used before it is defined."
+        return "Name error: a variable or function name is unknown."
+
+    if isinstance(e_value, ZeroDivisionError):
+        return "Math error: division by zero is not allowed."
+
+    if isinstance(e_value, IndexError):
+        return "Index error: you tried to access a list item that does not exist."
+
+    if isinstance(e_value, KeyError):
+        return f"Key error: {message}"
+
+    if isinstance(e_value, AttributeError):
+        return f"Attribute error: {message}"
+
+    if isinstance(e_value, TypeError):
+        return f"Type error: {message}"
+
+    return f"{e_type.__name__}: {message}"
+
+
+def format_student_friendly_exception(e_type, e_value, e_traceback):
+    items = []
+
+    if isinstance(e_value, SyntaxError):
+        filename = getattr(e_value, "filename", None) or "<unknown>"
+        lineno = getattr(e_value, "lineno", None)
+        code_line = (getattr(e_value, "text", None) or "").strip()
+
+        if lineno:
+            items.append((f"Error in {os.path.basename(filename)}, line {lineno}\n", None, filename, lineno))
+        else:
+            items.append((f"Error in {os.path.basename(filename)}\n", None, filename, None))
+
+        if code_line:
+            items.append((f"Code: {code_line}\n", None, filename, lineno))
+
+        items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
+        return items
+
+    entry, frame_id = _get_relevant_exception_entry(e_value, e_traceback)
+
+    if entry is not None:
+        items.append(
+            (
+                f"Error in {os.path.basename(entry.filename)}, line {entry.lineno}\n",
+                frame_id,
+                entry.filename,
+                entry.lineno,
+            )
+        )
+        if entry.line:
+            items.append((f"Code: {entry.line.strip()}\n", frame_id, entry.filename, entry.lineno))
+
+    items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
+    return items
 
 
 def in_debug_mode():

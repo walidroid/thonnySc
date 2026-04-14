@@ -75,11 +75,15 @@ class BaseBackend(ABC):
                 code = 0
             sys.exit(code)
         
-        print("\n" + "="*60, file=sys.stderr)
-        print("Backend Error:", file=sys.stderr)
-        print("="*60, file=sys.stderr)
-        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
-        print("="*60 + "\n", file=sys.stderr)
+        try:
+            from thonny.plugins.cpython_backend.cp_back import format_student_friendly_exception
+
+            for line, _, _, _ in format_student_friendly_exception(
+                exc_type, exc_value, exc_traceback
+            ):
+                print(line, end="", file=sys.stderr)
+        except Exception:
+            traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
 
     def mainloop(self):
         report_time("Beginning of mainloop")

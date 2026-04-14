@@ -1501,7 +1501,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             logger.exception("Could not handle hyperlink click", exc_info=e)
 
     def _show_user_exception(self, user_exception):
-        for line, frame_id, *_ in user_exception["items"]:
+        for line, frame_id, *_ in user_exception.get("brief_items", user_exception["items"]):
             tags = ("io", "stderr")
             if frame_id is not None:
                 frame_tag = "frame_%d" % frame_id
