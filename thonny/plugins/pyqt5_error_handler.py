@@ -1,9 +1,10 @@
 """
 PyQt5 exception handling utilities.
 
-The handler keeps full tracebacks in a log file while presenting only the last
-three meaningful lines to the user. It also suppresses repeated summaries so a
-burst of identical errors does not flood the console or dialogs.
+The handler keeps full tracebacks in a log file and prints the full standard
+Python traceback to stderr so callback errors remain visible in Thonny's shell.
+Short summaries are still used for dialogs, and repeated summaries are
+suppressed so a burst of identical errors does not flood the UI.
 """
 
 from __future__ import annotations
@@ -103,6 +104,22 @@ def _format_exception_only_line(exc_type: Type[BaseException], exc_value: BaseEx
     if message:
         return f"{exc_type.__name__}: {message}"
     return exc_type.__name__
+
+
+def _format_full_exception_lines(
+    exc_type: Type[BaseException],
+    exc_value: BaseException,
+    exc_tb: Optional[TracebackType],
+    source: str,
+) -> list[str]:
+    lines = traceback.format_exception(exc_type, exc_value, exc_tb)
+    if not lines:
+        lines = [_format_exception_only_line(exc_type, exc_value) + "\n"]
+
+    if source and source != "sys.excepthook":
+        return [f"Unhandled PyQt5 exception in {source}:\n"] + lines
+
+    return lines
 
 
 def _build_summary_lines(
@@ -290,11 +307,11 @@ class _ExceptionHandlerState:
             summary_lines = [_format_exception_only_line(exc_type, exc_value)]
 
         self.logger.error("Unhandled PyQt5 exception from %s", source, exc_info=(exc_type, exc_value, exc_tb))
+        full_lines = _format_full_exception_lines(exc_type, exc_value, exc_tb, source)
+        print("".join(full_lines), file=sys.stderr, end="")
 
         if self._is_repeated(summary_lines):
             return
-
-        print("\n".join(summary_lines), file=sys.stderr)
 
         if self.show_dialogs and self.dialog_bridge is not None:
             self.dialog_bridge.emit(summary_lines)
