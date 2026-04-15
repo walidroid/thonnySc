@@ -1055,7 +1055,7 @@ class MainCPythonBackend(MainBackend):
             tb = tb.tb_next
         last_frame = tb.tb_frame
 
-        if isinstance(e_value, SyntaxError):
+        if isinstance(e_value, SyntaxError) and not isinstance(e_value, IndentationError):
             # Don't show ast frame
             while last_frame.f_code.co_filename and last_frame.f_code.co_filename == ast.__file__:
                 logger.info("COF %r vs %r", last_frame.f_code.co_filename, ast.__file__)
@@ -1510,102 +1510,245 @@ def _get_relevant_exception_entry(e_value, e_traceback):
     return last_relevant_entry, last_relevant_frame_id
 
 
+def _student_syntax_error(e_value, message, code_line):
+    lowered = (getattr(e_value, "msg", None) or message).lower()
+    lineno = getattr(e_value, "lineno", None) or 0
+    token = (getattr(e_value, "text", None) or code_line or "").strip()
+
+    if "unexpected eof" in lowered:
+        return (
+            f"Line {lineno}: {token or '(empty line)'}",
+            "The code ended unexpectedly — a closing bracket, quote, or parenthesis is missing.",
+            "Fix: Check that every ( { [ \" ' has a matching closing pair.",
+        )
+    if ("eol" in lowered or "eof" in lowered) and "string" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "An opened string quote was never closed.",
+            "Fix: Add a closing quote (' or \") to match the opening one.",
+        )
+    if "expected" in lowered and ":" in lowered and token.endswith(")"):
+        return (
+            f"Line {lineno}: {token}",
+            "A colon was expected after this statement but is missing.",
+            "Fix: Add a colon (:) at the end of the line.",
+        )
+    if token.endswith("else") or token.startswith("else"):
+        return (
+            f"Line {lineno}: {token}",
+            "'else' must be at the same level as its 'if' or 'try' block.",
+            "Fix: Move 'else:' to the same indent as its matching 'if' or 'try'.",
+        )
+    if token.startswith("elif"):
+        return (
+            f"Line {lineno}: {token}",
+            "'elif' must follow an 'if' block directly.",
+            "Fix: Add an 'else:' clause before this 'elif', or check the indent of the 'if' above.",
+        )
+    if re.match(r"^\s*(except|finally)\b", token):
+        return (
+            f"Line {lineno}: {token}",
+            "'except' or 'finally' must follow a 'try' block.",
+            "Fix: Add a 'try:' block before this line, or check its indent.",
+        )
+    if re.search(r"^\s*(return|break|continue)\b.*\b(else|elif)\b", token):
+        return (
+            f"Line {lineno}: {token}",
+            "return/break/continue cannot be followed by else/elif on the same line.",
+            "Fix: Remove 'else' or 'elif' that follows this statement.",
+        )
+    if re.search(r"\bdef\b.*\b(then|begin|end)\b", lowered):
+        return (
+            f"Line {lineno}: {token}",
+            "Python uses 'def' not 'def then/begin/end'.",
+            "Fix: Remove 'then', 'begin', or 'end' from the function definition.",
+        )
+    if re.search(r"\bfor\b.*\bdo\b", lowered):
+        return (
+            f"Line {lineno}: {token}",
+            "Python uses 'for' without 'do'.",
+            "Fix: Remove 'do' — just write 'for i in range(...):'.",
+        )
+    if re.search(r"\bwhile\b.*\bdo\b", lowered):
+        return (
+            f"Line {lineno}: {token}",
+            "Python uses 'while' without 'do'.",
+            "Fix: Remove 'do' — just write 'while condition:'.",
+        )
+    if re.search(r"\bif\b.*\bthen\b", lowered):
+        return (
+            f"Line {lineno}: {token}",
+            "Python uses 'if' without 'then'.",
+            "Fix: Remove 'then' — just write 'if condition:'.",
+        )
+    if re.search(r"^\s+[^a-zA-Z_@\s].*:", token) or re.match(r"^\s+[*&#|^]", token):
+        return (
+            f"Line {lineno}: {token}",
+            "This line starts with an invalid character.",
+            "Fix: Remove the leading symbol or check the indent.",
+        )
+    if re.search(r":\s*\bthen\b", lowered):
+        return (
+            f"Line {lineno}: {token}",
+            "Python does not use 'then' after a colon.",
+            "Fix: Remove 'then' — the colon already ends the statement.",
+        )
+    return (
+        f"Line {lineno}: {token or '(empty line)'}",
+        "Python found a problem in this line.",
+        "Fix: Review the syntax of this line.",
+    )
+
+    if "unindent does not match" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "The indent of this line does not match the block above.",
+            "Fix: Make sure this line starts at the same indent as the line above.",
+        )
+    if "unexpected indent" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "There are extra spaces at the start of this line.",
+            "Fix: Remove the leading spaces, or add a colon (:) after the previous line.",
+        )
+    if "expected an indented block" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "Python expected more indentation after this line.",
+            "Fix: Add indentation (spaces) to the next line inside this block.",
+        )
+    if "unexpected token" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "Python found an unexpected symbol here.",
+            "Fix: Remove or replace the unexpected token.",
+        )
+    if "bad token" in lowered:
+        return (
+            f"Line {lineno}: {token}",
+            "This symbol is not valid Python.",
+            "Fix: Replace this token with a valid Python symbol.",
+        )
+
+    return (
+        f"Line {lineno}: {token or '(empty line)'}",
+        "Python found a problem in this line.",
+        "Fix: Review the syntax of this line.",
+    )
+
+
+def _student_runtime_error(e_type, e_value, message):
+    if issubclass(e_type, NameError):
+        match = re.search(r"name '(.+)' is not defined", message)
+        if match:
+            name = match.group(1)
+        else:
+            name = getattr(e_value, "name", None)
+        if name:
+            return (
+                f'Error: Name "{name}" is not defined.',
+                "A variable or function with this name has not been created yet.",
+                f"Fix: Define it before using it, e.g. {name} = 0",
+            )
+        return (
+            "Error: A variable or function name is not known.",
+            "A name used in the code has not been defined.",
+            "Fix: Check the spelling of all names, or define missing variables.",
+        )
+
+    if issubclass(e_type, ZeroDivisionError):
+        return (
+            "Error: Division by zero.",
+            "You cannot divide a number by zero.",
+            "Fix: Check the divisor — make sure it is not zero.",
+        )
+
+    if issubclass(e_type, IndexError):
+        return (
+            "Error: List index out of range.",
+            "You tried to access a position in a list that does not exist.",
+            "Fix: Make sure the index is between 0 and len(list)-1.",
+        )
+
+    if issubclass(e_type, KeyError):
+        return (
+            f"Error: Key not found — {message}.",
+            "A dictionary key that was requested does not exist.",
+            "Fix: Check the spelling of the key, or add it to the dictionary.",
+        )
+
+    if issubclass(e_type, AttributeError):
+        return (
+            f"Error: {message}.",
+            "An object does not have this attribute or method.",
+            "Fix: Check the object type and use only its available attributes.",
+        )
+
+    if issubclass(e_type, TypeError):
+        return (
+            f"Error: {message}.",
+            "The operation or function received an argument of the wrong type.",
+            "Fix: Check the types of the values you are using together.",
+        )
+
+    return (
+        f"Error: {e_type.__name__} — {message}",
+        "Python found a problem while running the code.",
+        "Fix: Read the error above and check the mentioned line.",
+    )
+
+
 def _format_student_message(e_type, e_value):
     message = str(e_value).strip() or e_type.__name__
 
-    if isinstance(e_value, IndentationError):
-        lowered = getattr(e_value, "msg", message).lower()
-        if "unindent does not match" in lowered:
-            return "This line has wrong indentation."
-        if "unexpected indent" in lowered:
-            return "This line has extra spaces at the beginning."
-        if "expected an indented block" in lowered:
-            return "Python expected an indented block here."
-        return "Check the spaces at the beginning of this line."
-
     if isinstance(e_value, SyntaxError):
-        return "Python cannot understand this line."
+        return ""  # handled directly in format_student_friendly_exception
 
-    if isinstance(e_value, NameError):
-        match = re.search(r"name '(.+)' is not defined", message)
-        if match:
-            return f'Name "{match.group(1)}" is not defined.'
-        return "A variable or function name is not known."
-
-    if isinstance(e_value, ZeroDivisionError):
-        return "You cannot divide by zero."
-
-    if isinstance(e_value, IndexError):
-        return "This list position does not exist."
-
-    if isinstance(e_value, KeyError):
-        return "This key was not found."
-
-    if isinstance(e_value, AttributeError):
-        return "This object does not have that attribute."
-
-    if isinstance(e_value, TypeError):
-        return "These values cannot be used together in this operation."
-
-    return "Python found a problem while running this line."
-
-
-def _get_student_followup_line(e_value, code_line):
-    if not code_line:
-        return None
-
-    text = code_line.strip()
-    if not text:
-        return None
-
-    if isinstance(e_value, IndentationError):
-        return f"Check the spaces before {text}"
-
-    if isinstance(e_value, SyntaxError):
-        return f"Check this line: {text}"
-
-    if isinstance(e_value, NameError):
-        return f"Check the spelling in: {text}"
-
-    return f"Check this line: {text}"
+    error = _student_runtime_error(e_type, e_value, message)
+    return f"{error[0]}\n{error[1]}\n{error[2]}"
 
 
 def format_student_friendly_exception(e_type, e_value, e_traceback):
     items = []
 
-    if isinstance(e_value, SyntaxError):
-        filename = getattr(e_value, "filename", None) or "<unknown>"
-        lineno = getattr(e_value, "lineno", None)
+    if isinstance(e_value, SyntaxError) and not isinstance(e_value, IndentationError):
         code_line = (getattr(e_value, "text", None) or "").strip()
-
-        if lineno:
-            items.append((f"Problem on line {lineno}\n", None, filename, lineno))
-        else:
-            items.append((f"Problem in {os.path.basename(filename)}\n", None, filename, None))
-
-        items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
-        followup = _get_student_followup_line(e_value, code_line)
-        if followup:
-            items.append((followup + "\n", None, filename, lineno))
+        line_info, error_info, fix_info = _student_syntax_error(
+            e_value, str(e_value).strip(), code_line
+        )
+        items.append(
+            (
+                line_info + "\n",
+                None,
+                getattr(e_value, "filename", None) or "<unknown>",
+                getattr(e_value, "lineno", None),
+            )
+        )
+        items.append(("Error: " + error_info + "\n", None, None, None))
+        items.append((fix_info + "\n", None, None, None))
         return items
 
+    error = _student_runtime_error(e_type, e_value, str(e_value).strip() or e_type.__name__)
     entry, frame_id = _get_relevant_exception_entry(e_value, e_traceback)
 
     if entry is not None:
+        lineno = entry.lineno
+        items.append((f"Line {lineno}: {entry.line.strip()}\n", frame_id, entry.filename, lineno))
+    else:
+        lineno = getattr(e_value, "lineno", None)
+        filename = getattr(e_value, "filename", None) or "<unknown>"
+        code_line = (getattr(e_value, "text", None) or "").strip()
         items.append(
             (
-                f"Problem on line {entry.lineno}\n",
-                frame_id,
-                entry.filename,
-                entry.lineno,
+                f"Line {lineno}: {code_line or '(not available)'}\n",
+                None,
+                filename,
+                lineno,
             )
         )
 
-    items.append((_format_student_message(e_type, e_value) + "\n", None, None, None))
-    if entry is not None:
-        followup = _get_student_followup_line(e_value, entry.line or "")
-        if followup:
-            items.append((followup + "\n", frame_id, entry.filename, entry.lineno))
+    items.append((error[1] + "\n", None, None, None))
+    items.append((error[2] + "\n", None, None, None))
     return items
 
 
