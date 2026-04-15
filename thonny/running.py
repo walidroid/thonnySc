@@ -713,71 +713,32 @@ class Runner:
     def _handle_backend_termination(self, returncode: int) -> None:
         err = f"Process ended with exit code {returncode}."
 
-        # Translate known Windows crash codes to human-readable messages
+        # Map known Windows native crash codes to readable descriptions
         _WINDOWS_CRASH_CODES = {
-            3221226505: ("STATUS_STACK_BUFFER_OVERRUN (0xC0000409)",
-                         "Fréquent avec PyQt5/Qt — vérifiez les conflits de DLLs ou les plugins Qt manquants."),
-            3221225477: ("ACCESS_VIOLATION (0xC0000005)",
-                         "Erreur de segmentation — référence nulle ou corruption de mémoire possible."),
-            3221225725: ("STATUS_CONTROL_C_EXIT (0xC000013A)",
-                         "Le processus a été interrompu par Ctrl+C."),
-            3221225786: ("STATUS_DLL_NOT_FOUND (0xC0000135)",
-                         "Une DLL requise est introuvable."),
-            3221225794: ("STATUS_DLL_INIT_FAILED (0xC0000142)",
-                         "Échec d'initialisation d'une DLL — vérifiez les dépendances."),
-            3221225501: ("STATUS_HEAP_CORRUPTION (0xC0000374)",
-                         "Corruption de la mémoire — possible conflit de bibliothèques."),
+            3221226505: "STATUS_STACK_BUFFER_OVERRUN (0xC0000409)",
+            3221225477: "ACCESS_VIOLATION (0xC0000005)",
+            3221225725: "STATUS_CONTROL_C_EXIT (0xC000013A)",
+            3221225786: "STATUS_DLL_NOT_FOUND (0xC0000135)",
+            3221225794: "STATUS_DLL_INIT_FAILED (0xC0000142)",
+            3221225501: "STATUS_HEAP_CORRUPTION (0xC0000374)",
         }
 
         if returncode in _WINDOWS_CRASH_CODES:
-            name, hint = _WINDOWS_CRASH_CODES[returncode]
-            err += f"\n→ {name}\n  {hint}"
+            err += f"\n→ {_WINDOWS_CRASH_CODES[returncode]}"
 
-        def _read_tail(path: str, encoding: str = "utf-8", max_chars: int = 12000) -> str:
-            try:
-                if not os.path.exists(path):
-                    return ""
-                with open(path, encoding=encoding, errors="replace") as fp:
-                    content = fp.read().strip()
-                if not content:
-                    return ""
-                if len(content) <= max_chars:
-                    return content
-                return "…(truncated)…\n" + content[-max_chars:]
-            except Exception:
-                logger.exception("Failed reading %s", path)
-                return ""
-
-        diagnostics = [
-            ("Trace du crash natif", os.path.join(THONNY_USER_DIR, "backend_faults.log"), "ascii"),
-            ("Derniers messages PyQt5/Qt", os.path.join(THONNY_USER_DIR, "pyqt5_errors.log"), "utf-8"),
-        ]
-
-        for title, path, encoding in diagnostics:
-            content = _read_tail(path, encoding=encoding)
-            if content:
-                err += f"\n\n{title} ({path}):\n{content}"
-
-        # Drain any remaining stderr from the process
-        try:
-            if (
-                hasattr(self, "_proxy")
-                and hasattr(self._proxy, "_proc")
-                and self._proxy._proc
-                and self._proxy._proc.stderr
-            ):
-                remaining = self._proxy._proc.stderr.read()
-                if remaining and remaining.strip():
-                    err += "\n\nStderr backend:\n" + remaining.strip()
-        except Exception:
-            logger.exception("Failed draining stderr")
-
+        # STATUS_STACK_BUFFER_OVERRUN is almost always caused by passing wrong arguments
+        # to a Qt/C++ method (e.g. setText(string, extra_arg) instead of setText(string)).
+        # Python never gets a chance to raise an exception because the crash happens inside
+        # Qt's C++ layer before Python can catch it.
         if returncode == 3221226505:
             err += (
-                "\n\nConseils pour diagnostiquer PyQt5/Qt:\n"
-                "- Vérifie que PyQt5, Qt et sip viennent du même environnement Python.\n"
-                "- Supprime les dossiers Qt copiés localement à côté du script (plugins/platforms).\n"
-                "- Lance Thonny depuis un terminal avec `set QT_DEBUG_PLUGINS=1` pour obtenir le détail du chargement des plugins."
+                "\n\nThe program crashed inside a PyQt5/Qt method."
+                "\nThis is usually caused by calling a Qt method with wrong arguments."
+                "\n\nCommon mistake — passing too many arguments:"
+                "\n  setText(\"some text\", x)   ← WRONG: setText only accepts one argument"
+                "\n  setText(\"some text\")      ← correct"
+                "\n\nCheck each call to setText(), setTitle(), setPlaceholderText(), etc."
+                " in your script and make sure you are not passing an extra variable."
             )
 
         get_workbench().event_generate("ProgramOutput", stream_name="stderr", data="\n" + err)
