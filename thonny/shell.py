@@ -1469,7 +1469,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             # Python stacktrace
             matches = list(re.finditer(r'File "(?P<file>[^"]+)", line (?P<line>\d+)', line))
             if not matches:
-                # Friendly traceback
                 matches = list(
                     re.finditer(
                         r"\b(?P<line>\d+)\b.+'(?P<file>[^\']+\.pyw?)'", line, flags=re.IGNORECASE
@@ -1505,9 +1504,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         fallback_filename = user_exception.get("filename")
         fallback_lineno = user_exception.get("lineno")
 
-        for index, (line, frame_id, filename, lineno) in enumerate(
-            user_exception.get("brief_items", user_exception["items"])
-        ):
+        for index, (line, frame_id, filename, lineno) in enumerate(user_exception["items"]):
             effective_filename = filename
             effective_lineno = lineno
             if (

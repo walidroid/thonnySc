@@ -56,9 +56,9 @@ class BaseBackend(ABC):
         self._last_sent_output = ""
         self._init_command_reader()
         
-        # Install custom exception hook
+        # Keep default Python exception formatting.
         if sys.excepthook == sys.__excepthook__:
-            sys.excepthook = self._custom_excepthook
+            sys.excepthook = sys.__excepthook__
 
     def _init_command_reader(self):
         # NB! This approach is used only in MicroPython and SshCPython backend.
@@ -67,23 +67,15 @@ class BaseBackend(ABC):
         threading.Thread(target=self._read_incoming_messages, daemon=True).start()
 
     def _custom_excepthook(self, exc_type, exc_value, exc_traceback):
-        """Handle exceptions in backend, especially PyQt5 errors"""
+        """Handle exceptions in backend with standard traceback formatting."""
         if exc_type.__name__ == 'SystemExit':
             try:
                 code = exc_value.code
             except AttributeError:
                 code = 0
             sys.exit(code)
-        
-        try:
-            from thonny.plugins.cpython_backend.cp_back import format_student_friendly_exception
 
-            for line, _, _, _ in format_student_friendly_exception(
-                exc_type, exc_value, exc_traceback
-            ):
-                print(line, end="", file=sys.stderr)
-        except Exception:
-            traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
+        traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
 
     def mainloop(self):
         report_time("Beginning of mainloop")
