@@ -43,6 +43,22 @@ class LocalCPythonProxy(SubprocessProxy):
     def _get_initial_cwd(self):
         return get_workbench().get_local_cwd()
 
+    def _get_environment(self):
+        env = super()._get_environment()
+
+        # Avoid inheriting external Qt plugin paths from the parent process.
+        # Mixed Qt/PyQt DLLs are a common reason for native crashes (eg. 0xC0000409)
+        # where Python traceback is never produced.
+        for key in [
+            "QT_PLUGIN_PATH",
+            "QT_QPA_PLATFORM_PLUGIN_PATH",
+            "QML2_IMPORT_PATH",
+            "QT_QPA_PLATFORMTHEME",
+        ]:
+            env.pop(key, None)
+
+        return env
+
     def _get_launch_cwd(self):
         # use a directory which doesn't contain misleading modules
         empty_dir = os.path.join(thonny.THONNY_USER_DIR, "leave_this_empty")
