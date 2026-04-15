@@ -733,25 +733,52 @@ class Runner:
             name, hint = _WINDOWS_CRASH_CODES[returncode]
             err += f"\n→ {name}\n  {hint}"
 
-        try:
-            faults_file = os.path.join(THONNY_USER_DIR, "backend_faults.log")
-            if os.path.exists(faults_file):
-                with open(faults_file, encoding="ASCII", errors="replace") as fp:
-                    faults_content = fp.read().strip()
-                if faults_content:
-                    err += "\n\nTrace du crash natif:\n" + faults_content
-        except Exception:
-            logger.exception("Failed retrieving backend faults")
+        def _read_tail(path: str, encoding: str = "utf-8", max_chars: int = 12000) -> str:
+            try:
+                if not os.path.exists(path):
+                    return ""
+                with open(path, encoding=encoding, errors="replace") as fp:
+                    content = fp.read().strip()
+                if not content:
+                    return ""
+                if len(content) <= max_chars:
+                    return content
+                return "…(truncated)…\n" + content[-max_chars:]
+            except Exception:
+                logger.exception("Failed reading %s", path)
+                return ""
+
+        diagnostics = [
+            ("Trace du crash natif", os.path.join(THONNY_USER_DIR, "backend_faults.log"), "ascii"),
+            ("Derniers messages PyQt5/Qt", os.path.join(THONNY_USER_DIR, "pyqt5_errors.log"), "utf-8"),
+        ]
+
+        for title, path, encoding in diagnostics:
+            content = _read_tail(path, encoding=encoding)
+            if content:
+                err += f"\n\n{title} ({path}):\n{content}"
 
         # Drain any remaining stderr from the process
-        # Drain any remaining stderr from the process
         try:
-            if hasattr(self, "_proxy") and hasattr(self._proxy, "_proc") and self._proxy._proc and self._proxy._proc.stderr:
+            if (
+                hasattr(self, "_proxy")
+                and hasattr(self._proxy, "_proc")
+                and self._proxy._proc
+                and self._proxy._proc.stderr
+            ):
                 remaining = self._proxy._proc.stderr.read()
                 if remaining and remaining.strip():
-                    err += "\n\n" + remaining.strip()
+                    err += "\n\nStderr backend:\n" + remaining.strip()
         except Exception:
             logger.exception("Failed draining stderr")
+
+        if returncode == 3221226505:
+            err += (
+                "\n\nConseils pour diagnostiquer PyQt5/Qt:\n"
+                "- Vérifie que PyQt5, Qt et sip viennent du même environnement Python.\n"
+                "- Supprime les dossiers Qt copiés localement à côté du script (plugins/platforms).\n"
+                "- Lance Thonny depuis un terminal avec `set QT_DEBUG_PLUGINS=1` pour obtenir le détail du chargement des plugins."
+            )
 
         get_workbench().event_generate("ProgramOutput", stream_name="stderr", data="\n" + err)
 
