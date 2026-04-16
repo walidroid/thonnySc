@@ -726,21 +726,6 @@ class Runner:
         if returncode in _WINDOWS_CRASH_CODES:
             err += f"\n→ {_WINDOWS_CRASH_CODES[returncode]}"
 
-        # STATUS_STACK_BUFFER_OVERRUN is almost always caused by passing wrong arguments
-        # to a Qt/C++ method (e.g. setText(string, extra_arg) instead of setText(string)).
-        # Python never gets a chance to raise an exception because the crash happens inside
-        # Qt's C++ layer before Python can catch it.
-        if returncode == 3221226505:
-            err += (
-                "\n\nThe program crashed inside a PyQt5/Qt method."
-                "\nThis is usually caused by calling a Qt method with wrong arguments."
-                "\n\nCommon mistake — passing too many arguments:"
-                "\n  setText(\"some text\", x)   ← WRONG: setText only accepts one argument"
-                "\n  setText(\"some text\")      ← correct"
-                "\n\nCheck each call to setText(), setTitle(), setPlaceholderText(), etc."
-                " in your script and make sure you are not passing an extra variable."
-            )
-
         get_workbench().event_generate("ProgramOutput", stream_name="stderr", data="\n" + err)
 
         get_workbench().become_active_window(False)
