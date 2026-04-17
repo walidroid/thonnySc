@@ -128,7 +128,7 @@ class MainCPythonBackend(MainBackend):
         if os.name == "nt":
             self._install_signal_handler()
 
-        self._install_pyqt5_safety_hook()
+        self._install_safe_excepthook()
 
     def _init_command_reader(self):
         # Can't use threaded reader
@@ -146,137 +146,25 @@ class MainCPythonBackend(MainBackend):
         else:
             signal.signal(signal.SIGINT, signal_handler)
 
-    def _install_pyqt5_safety_hook(self):
+    def _install_safe_excepthook(self):
         """
-        Install a sys.meta_path hook that intercepts the import of PyQt5.QtWidgets
-        and replaces each widget class with a Python subclass that validates argument
-        counts before forwarding to the underlying C++ method.
-
-        This converts native process crashes (STATUS_STACK_BUFFER_OVERRUN, exit code
-        0xC0000409) caused by wrong arguments to Qt methods — e.g. setText("x", y) —
-        into proper Python TypeErrors with a full traceback and line number.
-
-        We use sys.meta_path (not Thonny's import-handler system) because the backend
-        plugin-discovery path does not include the correct directory, so plugins in
-        thonny/plugins/backend/ are never loaded by the backend process.
+        By default, if an unhandled Python exception occurs inside a PyQt5 C++ slot
+        (like passing `setText('text', 123)`), PyQt5 catches it, calls sys.excepthook,
+        and if sys.excepthook is the default sys.__excepthook__, PyQt5 intentionally
+        calls abort() or qFatal(). This produces a native STATUS_STACK_BUFFER_OVERRUN
+        (exit code 0xC0000409) crash, hiding the actual Python TypeError from the user.
+        
+        By installing a custom sys.excepthook (even one that just delegates to the
+        original), we signal to PyQt5 that we are handling the exception ourselves.
+        This prevents the native crash, and Thonny cleanly intercepts the traceback
+        written to sys.stderr to show the user exactly where their code failed.
         """
-        _QT_METHOD_SIGNATURES = {
-            "setText":                   (1, 1, "setText(text: str)"),
-            "setPlainText":              (1, 1, "setPlainText(text: str)"),
-            "setHtml":                   (1, 1, "setHtml(html: str)"),
-            "setTitle":                  (1, 1, "setTitle(title: str)"),
-            "setWindowTitle":            (1, 1, "setWindowTitle(title: str)"),
-            "setToolTip":                (1, 1, "setToolTip(text: str)"),
-            "setStatusTip":              (1, 1, "setStatusTip(text: str)"),
-            "setWhatsThis":              (1, 1, "setWhatsThis(text: str)"),
-            "setPlaceholderText":        (1, 1, "setPlaceholderText(text: str)"),
-            "setPrefix":                 (1, 1, "setPrefix(prefix: str)"),
-            "setSuffix":                 (1, 1, "setSuffix(suffix: str)"),
-            "setFlat":                   (1, 1, "setFlat(flat: bool)"),
-            "setChecked":                (1, 1, "setChecked(checked: bool)"),
-            "setEnabled":                (1, 1, "setEnabled(enabled: bool)"),
-            "setVisible":                (1, 1, "setVisible(visible: bool)"),
-            "setReadOnly":               (1, 1, "setReadOnly(readOnly: bool)"),
-            "setMaxLength":              (1, 1, "setMaxLength(length: int)"),
-            "setMaximum":                (1, 1, "setMaximum(value: int)"),
-            "setMinimum":                (1, 1, "setMinimum(value: int)"),
-            "setValue":                  (1, 1, "setValue(value: int)"),
-            "setRange":                  (2, 2, "setRange(minimum: int, maximum: int)"),
-            "setAlignment":              (1, 1, "setAlignment(alignment)"),
-            "setFont":                   (1, 1, "setFont(font: QFont)"),
-            "setStyleSheet":             (1, 1, "setStyleSheet(styleSheet: str)"),
-            "setFixedSize":              (1, 2, "setFixedSize(width: int, height: int)  or  setFixedSize(QSize)"),
-            "setFixedWidth":             (1, 1, "setFixedWidth(width: int)"),
-            "setFixedHeight":            (1, 1, "setFixedHeight(height: int)"),
-            "resize":                    (1, 2, "resize(width: int, height: int)  or  resize(QSize)"),
-            "move":                      (1, 2, "move(x: int, y: int)  or  move(QPoint)"),
-            "addItem":                   (1, 3, "addItem(text: str[, icon[, userData]])"),
-            "addItems":                  (1, 1, "addItems(texts: list)"),
-            "insertItem":                (2, 4, "insertItem(index: int, text: str[, icon[, userData]])"),
-            "setCurrentIndex":           (1, 1, "setCurrentIndex(index: int)"),
-            "setCurrentText":            (1, 1, "setCurrentText(text: str)"),
-            "setPixmap":                 (1, 1, "setPixmap(pixmap: QPixmap)"),
-            "setScaledContents":         (1, 1, "setScaledContents(scaled: bool)"),
-            "setWordWrap":               (1, 1, "setWordWrap(on: bool)"),
-            "setColumnCount":            (1, 1, "setColumnCount(columns: int)"),
-            "setRowCount":               (1, 1, "setRowCount(rows: int)"),
-            "setHorizontalHeaderLabels": (1, 1, "setHorizontalHeaderLabels(labels: list)"),
-            "setVerticalHeaderLabels":   (1, 1, "setVerticalHeaderLabels(labels: list)"),
-        }
+        def safe_excepthook(exc_type, exc_value, exc_traceback):
+            import sys
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
-        _TARGET_CLASSES = [
-            "QWidget", "QLabel", "QLineEdit", "QPushButton", "QTextEdit",
-            "QPlainTextEdit", "QCheckBox", "QRadioButton", "QComboBox",
-            "QSpinBox", "QDoubleSpinBox", "QSlider", "QDial",
-            "QGroupBox", "QTabWidget", "QListWidget", "QTableWidget",
-            "QTreeWidget", "QProgressBar", "QLCDNumber",
-        ]
-
-        def _make_safe_method(method_name, original_method, min_args, max_args, signature):
-            def _safe(self, *args, **kwargs):
-                n = len(args) + len(kwargs)
-                if n < min_args or n > max_args:
-                    expected = (
-                        f"exactly {min_args}"
-                        if min_args == max_args
-                        else f"{min_args} to {max_args}"
-                    )
-                    raise TypeError(
-                        f"{type(self).__name__}.{method_name}() takes {expected} "
-                        f"argument(s) but {n} {'was' if n == 1 else 'were'} given.\n"
-                        f"  Correct usage: {signature}"
-                    )
-                return original_method(self, *args, **kwargs)
-            _safe.__name__ = method_name
-            _safe.__qualname__ = f"<pyqt5_safe>.{method_name}"
-            return _safe
-
-        def _patch_module(module):
-            for class_name in _TARGET_CLASSES:
-                original_cls = getattr(module, class_name, None)
-                if original_cls is None:
-                    continue
-                overrides = {}
-                for method_name, (min_a, max_a, sig) in _QT_METHOD_SIGNATURES.items():
-                    original_method = getattr(original_cls, method_name, None)
-                    if original_method is None:
-                        continue
-                    overrides[method_name] = _make_safe_method(
-                        method_name, original_method, min_a, max_a, sig
-                    )
-                if not overrides:
-                    continue
-                safe_cls = type(class_name, (original_cls,), overrides)
-                safe_cls.__module__ = module.__name__
-                try:
-                    setattr(module, class_name, safe_cls)
-                except Exception:
-                    pass
-
-        class _PyQt5WidgetsSafetyFinder:
-            """sys.meta_path finder that patches PyQt5.QtWidgets after it loads."""
-
-            def find_module(self, fullname, path=None):
-                if fullname == "PyQt5.QtWidgets" and fullname not in sys.modules:
-                    return self  # act as loader too
-                return None
-
-            def load_module(self, fullname):
-                # Remove ourselves first to avoid infinite recursion
-                try:
-                    sys.meta_path.remove(self)
-                except ValueError:
-                    pass
-                import importlib
-                mod = importlib.import_module(fullname)
-                _patch_module(mod)
-                return mod
-
-        # If already imported (shouldn't be at backend startup, but be safe)
-        if "PyQt5.QtWidgets" in sys.modules:
-            _patch_module(sys.modules["PyQt5.QtWidgets"])
-        else:
-            sys.meta_path.insert(0, _PyQt5WidgetsSafetyFinder())
+        import sys
+        sys.excepthook = safe_excepthook
 
     def _fetch_next_incoming_message(self, timeout=None) -> CommandToBackend:
         # Reading must be done synchronously
