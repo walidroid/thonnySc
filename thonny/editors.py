@@ -436,10 +436,10 @@ class Editor(ttk.Frame):
 
     def ask_new_local_path(self):
         if self._filename is None:
-            initialdir = get_workbench().get_local_cwd()
+            initialdir = "c:\\"
             initialfile = None
         else:
-            initialdir = os.path.dirname(self._filename)
+            initialdir = "c:\\"
             initialfile = os.path.basename(self._filename)
 
         # https://tcl.tk/man/tcl8.6/TkCmd/getOpenFile.htm
@@ -877,12 +877,7 @@ class EditorNotebook(ui_utils.ClosableNotebook):
             return
 
         if node == "local":
-            initialdir = get_workbench().get_local_cwd()
-            if (
-                self.get_current_editor() is not None
-                and self.get_current_editor().get_filename() is not None
-            ):
-                initialdir = os.path.dirname(self.get_current_editor().get_filename())
+            initialdir = "c:\\"
             path = askopenfilename(
                 filetypes=_dialog_filetypes, initialdir=initialdir, parent=get_workbench()
             )
