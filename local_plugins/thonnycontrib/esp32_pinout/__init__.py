@@ -40,20 +40,20 @@ PIN_DB_30PIN = {
     "L15": {"name": "VIN", "gpio": None, "type": "power", "desc": "Alimentation 5V (Entrée USB regulée)"},
     
     # Right Side
-    "R1": {"name": "GND", "gpio": None, "type": "gnd", "desc": "Masse / Ground (0V)"},
-    "R2": {"name": "D23", "gpio": 23, "type": "gpio", "desc": "GPIO 23 / VSPI_MOSI"},
-    "R3": {"name": "D22", "gpio": 22, "type": "gpio", "desc": "GPIO 22 / I2C_SCL (Horloge I2C par défaut)"},
-    "R4": {"name": "TX0", "gpio": 1, "type": "serial", "desc": "GPIO 1 / U0TXD (Liaison série console/téléversement)"},
-    "R5": {"name": "RX0", "gpio": 3, "type": "serial", "desc": "GPIO 3 / U0RXD (Liaison série console/téléversement)"},
-    "R6": {"name": "D21", "gpio": 21, "type": "gpio", "desc": "GPIO 21 / I2C_SDA (Données I2C par défaut)"},
-    "R7": {"name": "D19", "gpio": 19, "type": "gpio", "desc": "GPIO 19 / VSPI_MISO"},
-    "R8": {"name": "D18", "gpio": 18, "type": "gpio", "desc": "GPIO 18 / VSPI_CLK"},
-    "R9": {"name": "D5", "gpio": 5, "type": "gpio", "desc": "GPIO 5 / VSPI_CS / PWM"},
-    "R10": {"name": "D17", "gpio": 17, "type": "gpio", "desc": "GPIO 17 / UART2_TXD"},
-    "R11": {"name": "D16", "gpio": 16, "type": "gpio", "desc": "GPIO 16 / UART2_RXD"},
-    "R12": {"name": "D4", "gpio": 4, "type": "gpio", "desc": "GPIO 4 / ADC2_CH0 / Touch0 / PWM"},
-    "R13": {"name": "D2", "gpio": 2, "type": "gpio", "desc": "GPIO 2 / LED intégrée (Bleue) / ADC2_CH2 / Touch2"},
-    "R14": {"name": "D15", "gpio": 15, "type": "gpio", "desc": "GPIO 15 / ADC2_CH3 / Touch3 / HSPI_CS / Boot Strap"},
+    "R1": {"name": "D23", "gpio": 23, "type": "gpio", "desc": "GPIO 23 / VSPI_MOSI"},
+    "R2": {"name": "D22", "gpio": 22, "type": "gpio", "desc": "GPIO 22 / I2C_SCL (Horloge I2C par défaut)"},
+    "R3": {"name": "TX0", "gpio": 1, "type": "serial", "desc": "GPIO 1 / U0TXD (Console liaison série)"},
+    "R4": {"name": "RX0", "gpio": 3, "type": "serial", "desc": "GPIO 3 / U0RXD (Console liaison série)"},
+    "R5": {"name": "D21", "gpio": 21, "type": "gpio", "desc": "GPIO 21 / I2C_SDA (Données I2C par défaut)"},
+    "R6": {"name": "D19", "gpio": 19, "type": "gpio", "desc": "GPIO 19 / VSPI_MISO"},
+    "R7": {"name": "D18", "gpio": 18, "type": "gpio", "desc": "GPIO 18 / VSPI_CLK"},
+    "R8": {"name": "D5", "gpio": 5, "type": "gpio", "desc": "GPIO 5 / VSPI_CS / PWM"},
+    "R9": {"name": "TX2", "gpio": 17, "type": "serial", "desc": "GPIO 17 / UART2_TXD"},
+    "R10": {"name": "RX2", "gpio": 16, "type": "serial", "desc": "GPIO 16 / UART2_RXD"},
+    "R11": {"name": "D4", "gpio": 4, "type": "gpio", "desc": "GPIO 4 / ADC2_CH0 / Touch0 / PWM"},
+    "R12": {"name": "D2", "gpio": 2, "type": "gpio", "desc": "GPIO 2 / LED intégrée (Bleue) / ADC2_CH2 / Touch2"},
+    "R13": {"name": "D15", "gpio": 15, "type": "gpio", "desc": "GPIO 15 / ADC2_CH3 / Touch3 / HSPI_CS / Boot Strap"},
+    "R14": {"name": "GND", "gpio": None, "type": "gnd", "desc": "Masse / Ground (0V)"},
     "R15": {"name": "3V3", "gpio": None, "type": "power", "desc": "Sortie alimentation régulée 3.3V"},
 }
 
@@ -312,13 +312,13 @@ class Esp32PinoutView(tk.Frame):
         if gpio is not None:
             mode = self.snippet_var.get()
             if mode == "Pin.OUT":
-                snippet = f"from machine import Pin\np{gpio} = Pin({gpio}, Pin.OUT)"
+                snippet = f"\np{gpio} = Pin({gpio}, Pin.OUT)"
             elif mode == "Pin.IN":
-                snippet = f"from machine import Pin\np{gpio} = Pin({gpio}, Pin.IN, Pin.PULL_UP)"
+                snippet = f"\np{gpio} = Pin({gpio}, Pin.IN, Pin.PULL_UP)"
             elif mode == "ADC":
-                snippet = f"from machine import ADC, Pin\nadc{gpio} = ADC(Pin({gpio}))"
+                snippet = f"\nadc{gpio} = ADC(Pin({gpio}))"
             elif mode == "PWM":
-                snippet = f"from machine import Pin, PWM\npwm{gpio} = PWM(Pin({gpio}), freq=5000, duty=512)"
+                snippet = f"\npwm{gpio} = PWM(Pin({gpio}), freq=5000, duty=512)"
             else: # "GPIO"
                 snippet = str(gpio)
                 

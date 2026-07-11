@@ -55,7 +55,7 @@ if (Test-Path "Python\Scripts\pip.exe") {
     Write-Host "Pip installed successfully" -ForegroundColor Green
 }
 
-& ".\Python\python.exe" -m pip install --upgrade pip wheel setuptools --no-warn-script-location
+& ".\Python\python.exe" -m pip install --upgrade pip wheel "setuptools<82" --no-warn-script-location
 
 # Step 2.5: Verify Qt Designer
 Write-Host "`n[2.5/5] Verifying Qt Designer..." -ForegroundColor Cyan

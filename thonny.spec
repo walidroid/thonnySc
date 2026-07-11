@@ -74,6 +74,7 @@ a = Analysis(
         'thonnycontrib.thonny_quick_switch',
         'thonnycontrib.thonny_qt_designer',
         'thonnycontrib.esp32_pinout',
+        'thonnycontrib.esp32_wifi',
         'pkg_resources.py2_warn',
         # Code completion
         'jedi',
