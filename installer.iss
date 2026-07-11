@@ -49,7 +49,7 @@ Source: "wheels\*"; DestDir: "{app}\wheels"; Flags: ignoreversion recursesubdirs
 #endif
 
 ; ESP32 Auto-Flasher files (Firmware and Drivers)
-#ifexist "firmware\esp32-20210902-v1.17.bin"
+#ifexist "firmware\esp32-20240222-v1.22.2.bin"
 Source: "firmware\*"; DestDir: "{app}\firmware"; Flags: ignoreversion recursesubdirs createallsubdirs
 #endif
 #ifexist "drivers\CP210xVCPInstaller_x64.exe"
@@ -92,7 +92,7 @@ begin
         TmpFileName := ExpandConstant('{tmp}') + '\~flash_results.txt';
         
         repeat
-          rpt:=MsgBox('Voulez vous installer le firmware Micropython(v1.17) sur votre carte ESP32 ?'+#13#10+'NB: Branchez la carte puis appuiez sur le bouton EN (ou BOOT) 2 secondes puis cliquez sur Oui' , mbConfirmation, MB_YESNO) = idYes;
+          rpt:=MsgBox('Voulez vous installer le firmware Micropython(v1.22.2) sur votre carte ESP32 ?'+#13#10+'NB: Branchez la carte puis appuiez sur le bouton EN (ou BOOT) 2 secondes puis cliquez sur Oui' , mbConfirmation, MB_YESNO) = idYes;
           
           if rpt  then
           begin
@@ -105,7 +105,7 @@ begin
                   begin
                      ESP32Page.SetText('Formatage Termine. Flashage en cours... (environ 90 secondes)' ,'Veuillez patienter') ;
                      ESP32Page.SetProgress(14,103);
-                     Command :=Format('"%s" /S /C ""%s" %s > "%s""', [ExpandConstant('{cmd}'), ExpandConstant('{app}')+'\Python\python.exe', '-m esptool write_flash --flash_mode keep --flash_size detect 0x1000 "'+ ExpandConstant('{app}')+'\firmware\esp32-20210902-v1.17.bin"', TmpFilename]);
+                     Command :=Format('"%s" /S /C ""%s" %s > "%s""', [ExpandConstant('{cmd}'), ExpandConstant('{app}')+'\Python\python.exe', '-m esptool write_flash --baud 460800 --flash_mode dio --flash_size detect 0x1000 "'+ ExpandConstant('{app}')+'\firmware\esp32-20240222-v1.22.2.bin"', TmpFilename]);
                      if ( Exec(ExpandConstant('{cmd}'), Command, '', SW_HIDE, ewWaitUntilTerminated , ResultCode) and LoadStringFromFile(TmpFileName, ExecStdout))   then
                      begin
                           if (pos('Hash of data verified.',String(ExecStdout))<> 0)   then 

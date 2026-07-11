@@ -73,6 +73,7 @@ a = Analysis(
         'thonnycontrib.thonny_autosave',
         'thonnycontrib.thonny_quick_switch',
         'thonnycontrib.thonny_qt_designer',
+        'thonnycontrib.esp32_pinout',
         'pkg_resources.py2_warn',
         # Code completion
         'jedi',

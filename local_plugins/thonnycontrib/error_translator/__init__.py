@@ -47,7 +47,6 @@ def translate_text(text):
 
 def handle_program_output(event):
     """Handle ProgramOutput events and translate stderr."""
-    print(f"[ERROR_TRANSLATOR] Event received: {event}", flush=True)  # Debug
     try:
         # Only translate stderr (error output)
         if hasattr(event, 'stream_name'):
@@ -55,20 +54,15 @@ def handle_program_output(event):
         else:
             stream = event.get("stream_name")
         
-        print(f"[ERROR_TRANSLATOR] Stream: {stream}", flush=True)  # Debug
-        
         if stream == "stderr":
             if hasattr(event, 'data'):
                 original_data = event.data
             else:
                 original_data = event.get("data", "")
             
-            print(f"[ERROR_TRANSLATOR] Original: {original_data}", flush=True)  # Debug
-            
             if original_data:
                 # Apply translation
                 translated_data = translate_text(original_data)
-                print(f"[ERROR_TRANSLATOR] Translated: {translated_data}", flush=True)  # Debug
                 
                 # Update the event with translated text
                 if hasattr(event, 'data'):
@@ -76,31 +70,12 @@ def handle_program_output(event):
                 else:
                     event["data"] = translated_data
     except Exception as e:
-        print(f"[ERROR_TRANSLATOR] Exception: {e}", flush=True)  # Debug
         logger.exception("Error in error_translator plugin: %s", e)
 
 def load_plugin():
-    return # Disabled to fix freeze/crash
-    return # Disabled duplicate plugin to fix freeze
     """Initialize the error translation plugin."""
-    print("[ERROR_TRANSLATOR] Loading plugin...", flush=True)  # Debug
-    
-    try:
-        # Install friendly-traceback with French language
-        import friendly_traceback
-        friendly_traceback.install(lang="fr")
-        print("[ERROR_TRANSLATOR] friendly-traceback installed with French", flush=True)
-        logger.info("friendly-traceback installed with French language")
-    except ImportError:
-        print("[ERROR_TRANSLATOR] friendly-traceback not available", flush=True)
-        logger.warning("friendly-traceback not available, using regex-only translation")
-    except Exception as e:
-        print(f"[ERROR_TRANSLATOR] Error loading friendly-traceback: {e}", flush=True)
-        logger.exception("Error installing friendly-traceback: %s", e)
-    
     # Hook into ProgramOutput events
     # The True parameter means we want to receive events before they're processed
     wb = get_workbench()
     wb.bind("ProgramOutput", handle_program_output, True)
-    print(f"[ERROR_TRANSLATOR] Plugin loaded, bound to ProgramOutput", flush=True)
     logger.info("Error translator plugin loaded")
