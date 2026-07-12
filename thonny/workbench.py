@@ -622,7 +622,10 @@ class Workbench(tk.Tk):
             lambda: self._change_font_size(1),
             default_sequence=select_sequence("<Control-plus>", "<Command-plus>"),
             extra_sequences=["<Control-KP_Add>"],
-            group=60,
+            group=999,
+            image="zoomin",
+            caption=tr("Zoom in"),
+            include_in_toolbar=True,
         )
 
         self.add_command(
@@ -632,7 +635,10 @@ class Workbench(tk.Tk):
             lambda: self._change_font_size(-1),
             default_sequence=select_sequence("<Control-minus>", "<Command-minus>"),
             extra_sequences=["<Control-KP_Subtract>"],
-            group=60,
+            group=999,
+            image="zoomout",
+            caption=tr("Zoom out"),
+            include_in_toolbar=True,
         )
 
         self.bind("<Control-MouseWheel>", self._cmd_zoom_with_mouse, True)
