@@ -211,33 +211,8 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 
-# Step 2.6.4: Install thonny-autosave and missing stdlib dependencies
-Write-Host "`nInstalling thonny-autosave and dependencies..."
-
-# Copy sched.py (missing from embeddable python)
-try {
-    # Try to find sched.py using the python available in PATH (or the one running this script context)
-    $schedFile = python -c "import sched; print(sched.__file__)" 2>$null
-    
-    if ($schedFile -and (Test-Path $schedFile)) {
-        Copy-Item $schedFile -Destination "Python\sched.py" -Force
-        Write-Host "Copied sched.py from $schedFile" -ForegroundColor Green
-    } else {
-        # Fallback to a hardcoded path only if dynamic search fails
-        $hostSched = "C:\Users\Walid\AppData\Local\Programs\Python\Python313\Lib\sched.py"
-        if (Test-Path $hostSched) {
-            Copy-Item $hostSched -Destination "Python\sched.py" -Force
-            Write-Host "Copied sched.py from hardcoded path" -ForegroundColor Green
-        } else {
-             Write-Host "Warning: Could not locate sched.py dynamically or at hardcoded path." -ForegroundColor Yellow
-        }
-    }
-} catch {
-    Write-Host "Warning: Error while trying to locate sched.py: $_" -ForegroundColor Yellow
-}
-
-# Install the plugin (no-deps to avoid installing older Thonny version)
-& ".\Python\python.exe" -m pip install thonny-autosave --no-deps --no-warn-script-location
+# Step 2.6.4: thonny_autosave is bundled locally in local_plugins/thonnycontrib/thonny_autosave
+Write-Host "`nUsing bundled thonny_autosave from local_plugins..." -ForegroundColor Green
 
 
 

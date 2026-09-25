@@ -8,20 +8,19 @@ from logging import getLogger
 
 logger = getLogger(__name__)
 
-# Additional regex-based translations for errors not caught by friendly-traceback
+# Additional regex-based translations for French error messages
 ERROR_TRANSLATIONS = {
-    r"NameError: name '(.*)' is not defined": r"NameError : la variable « \1 » n'est pas définie",
-    r"SyntaxError: invalid syntax": r"SyntaxError : syntaxe invalide",
+    r"NameError: name '([^']*)' is not defined(.*)": r"NameError : la variable « \1 » n'est pas définie\2",
+    r"SyntaxError: invalid syntax(.*)": r"SyntaxError : syntaxe invalide\1",
     r"IndentationError: unexpected indent": r"IndentationError : indentation inattendue",
     r"IndentationError: expected an indented block": r"IndentationError : un bloc indenté est attendu",
-    r"TypeError: (.*) takes (.*) positional argument but (.*) were given": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)",
-    r"TypeError: (.*) missing (.*) required positional arguments: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
-    r"ValueError: (.*)": r"ValueError : \1",
-    r"IndexError: (.*) index out of range": r"IndexError : index \1 hors intervalle",
+    r"TypeError: (.*?) takes (\d+) positional arguments? but (\d+) (?:was|were) given(.*)": r"TypeError : \1 prend \2 paramètre(s) mais \3 a/ont été donné(s)\4",
+    r"TypeError: (.*?) missing (\d+) required positional arguments?: (.*)": r"TypeError : \1 manque \2 paramètre(s) requis : \3",
+    r"IndexError: (.*?) index out of range": r"IndexError : index \1 hors limites",
     r"KeyError: (.*)": r"KeyError : clé \1 introuvable",
-    r"ZeroDivisionError: division by zero": r"ZeroDivisionError : division par zéro",
-    r"ModuleNotFoundError: No module named '(.*)'" : r"ModuleNotFoundError : Aucun module nommé « \1 »",
-    r"AttributeError: '(.*)' object has no attribute '(.*)'": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »",
+    r"ZeroDivisionError: (?:division|integer division or modulo) by zero": r"ZeroDivisionError : division par zéro",
+    r"ModuleNotFoundError: No module named '([^']*)'": r"ModuleNotFoundError : Aucun module nommé « \1 »",
+    r"AttributeError: '([^']*)' object has no attribute '([^']*)'(.*)": r"AttributeError : l'objet « \1 » n'a pas d'attribut « \2 »\3",
     r"FileNotFoundError: \[Errno 2\] No such file or directory: '(.*)'": r"FileNotFoundError : [Errno 2] Aucun fichier ou dossier de ce type : « \1 »",
 }
 

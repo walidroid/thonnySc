@@ -14,7 +14,7 @@ from logging import getLogger
 logger = getLogger(__name__)
 
 
-def _find_designer_exe() -> str | None:
+def _find_designer_exe():
     """Return the path to designer.exe, or None if not found."""
     candidates = []
 
@@ -23,9 +23,9 @@ def _find_designer_exe() -> str | None:
         # Running as PyInstaller bundle: Thonny.exe sits in {app}\
         app_dir = os.path.dirname(sys.executable)
     else:
-        # Running from source: look relative to project root
+        # Running from source: look relative to project root (3 levels up)
         app_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+            os.path.join(os.path.dirname(__file__), "..", "..", "..")
         )
 
     candidates.append(os.path.join(app_dir, "Qt Designer", "designer.exe"))
@@ -100,13 +100,16 @@ def load_plugin():
     wb = get_workbench()
 
     # Register the toolbar button image
-    # Frozen bundle: buttons/ is in _MEIPASS (same level as thonnycontrib/)
-    # Source: buttons/ is at project root, 4 levels up from this file
+    # Frozen bundle: buttons/ is in _MEIPASS or app_dir
+    # Source: buttons/ is at project root, 3 levels up from this file
     if getattr(sys, "frozen", False):
-        buttons_dir = os.path.join(sys._MEIPASS, "buttons")
+        meipass = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        buttons_dir = os.path.join(meipass, "buttons")
+        if not os.path.isdir(buttons_dir):
+            buttons_dir = os.path.join(os.path.dirname(sys.executable), "buttons")
     else:
         buttons_dir = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "buttons")
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "buttons")
         )
 
     img_path = os.path.join(buttons_dir, "button_qt-designer.png")

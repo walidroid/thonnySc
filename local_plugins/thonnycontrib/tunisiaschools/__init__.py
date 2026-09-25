@@ -56,16 +56,18 @@ def add_pyqt_code():
             get_workbench().new_file()
             editor = get_workbench().get_editor_notebook().get_current_editor()
             
+        clean_path = path.replace("\\", "/")
         editor.get_code_view().text.insert(
-            '0.0','from PyQt5.uic import loadUi\n'+
-            'from PyQt5.QtWidgets import QApplication\n'+
-            '\n'+mytxt+'\n'+
-            'app = QApplication([])\n'+
-            'windows = loadUi ("'+ path +'")\n'+
-            'windows.show()\n'+
-            btnstxt+'\n'
-            'app.exec_()'
-            )
+            '0.0',
+            'from PyQt5.uic import loadUi\n'
+            'from PyQt5.QtWidgets import QApplication\n'
+            '\n' + mytxt + '\n'
+            'app = QApplication([])\n'
+            f'windows = loadUi("{clean_path}")\n'
+            'windows.show()\n'
+            + btnstxt + '\n'
+            'app.exec_()\n'
+        )
 
 
 def find_qt_designer():
@@ -221,13 +223,9 @@ def load_plugin():
         image = designer_image_path
     )
     # Changement de dossier de sauvegarde : 
-
-    # en cas ou la date est erroné sur le pc
-
-    cwd = 'C:\\'
-    get_workbench().set_local_cwd(cwd)
+    if sys.platform == "win32" and os.path.isdir("C:\\"):
+        get_workbench().set_local_cwd("C:\\")
 
     # Ne pas ouvrir les derniers fichiers 
-
     get_workbench().set_option("file.current_file", "")
-    get_workbench().set_option("file.open_files", "")
+    get_workbench().set_option("file.open_files", [])

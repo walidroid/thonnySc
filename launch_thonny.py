@@ -56,6 +56,11 @@ setup_tcl_tk()
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
+# Include local_plugins for thonnycontrib discovery
+local_plugins_dir = os.path.join(project_root, "local_plugins")
+if os.path.isdir(local_plugins_dir) and local_plugins_dir not in sys.path:
+    sys.path.insert(1, local_plugins_dir)
+
 # Ensure site-packages directories are in sys.path
 # This is critical for packages like pyserial and adafruit-board-toolkit
 # which may not be found if the Python installation config is broken
@@ -64,7 +69,7 @@ for sp_dir in [
     os.path.join(project_root, "Python", "Lib", "site-packages"),
 ]:
     if os.path.isdir(sp_dir) and sp_dir not in sys.path:
-        sys.path.insert(1, sp_dir)
+        sys.path.insert(2, sp_dir)
         print(f"DEBUG: Added site-packages: {sp_dir}")
 
 print(f"DEBUG: Project root: {project_root}")

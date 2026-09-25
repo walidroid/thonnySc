@@ -139,11 +139,10 @@ class Esp32PinoutView(tk.Frame):
         self.scrollbar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         
-        # Bind scrolling events
+        # Bind scrolling events safely on mouse hover
         self.canvas.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
-        self.canvas.bind_all("<Button-4>", self.on_mousewheel)
-        self.canvas.bind_all("<Button-5>", self.on_mousewheel)
+        self.canvas.bind("<Enter>", self._bind_mousewheel)
+        self.canvas.bind("<Leave>", self._unbind_mousewheel)
         
         # --- Bottom Details Panel ---
         self.details_frame = tk.LabelFrame(self, text="Détails de la Broche", bg="#2d2d2d", fg="#3B82F6", font=("Segoe UI", 9, "bold"), padx=8, pady=8)
@@ -190,16 +189,28 @@ class Esp32PinoutView(tk.Frame):
             self.current_db = PIN_DB_38PIN
         self.redraw_board()
 
+    def _bind_mousewheel(self, event=None):
+        self.canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.canvas.bind_all("<Button-4>", self.on_mousewheel)
+        self.canvas.bind_all("<Button-5>", self.on_mousewheel)
+
+    def _unbind_mousewheel(self, event=None):
+        self.canvas.unbind_all("<MouseWheel>")
+        self.canvas.unbind_all("<Button-4>")
+        self.canvas.unbind_all("<Button-5>")
+
     def on_mousewheel(self, event):
         # Allow scrolling only if view is active and mapped
         if not self.winfo_ismapped():
             return
         
-        if event.delta:
-            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        elif event.num == 4:
+        delta = getattr(event, "delta", 0)
+        num = getattr(event, "num", None)
+        if delta:
+            self.canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+        elif num == 4:
             self.canvas.yview_scroll(-1, "units")
-        elif event.num == 5:
+        elif num == 5:
             self.canvas.yview_scroll(1, "units")
 
     def redraw_board(self):
@@ -309,28 +320,36 @@ class Esp32PinoutView(tk.Frame):
         
         # 2. Code Generation
         snippet = ""
+        import_line = ""
         if gpio is not None:
             mode = self.snippet_var.get()
             if mode == "Pin.OUT":
-                snippet = f"\np{gpio} = Pin({gpio}, Pin.OUT)"
+                import_line = "from machine import Pin"
+                snippet = f"p{gpio} = Pin({gpio}, Pin.OUT)"
             elif mode == "Pin.IN":
-                snippet = f"\np{gpio} = Pin({gpio}, Pin.IN, Pin.PULL_UP)"
+                import_line = "from machine import Pin"
+                snippet = f"p{gpio} = Pin({gpio}, Pin.IN, Pin.PULL_UP)"
             elif mode == "ADC":
-                snippet = f"\nadc{gpio} = ADC(Pin({gpio}))"
+                import_line = "from machine import ADC, Pin"
+                snippet = f"adc{gpio} = ADC(Pin({gpio}))"
             elif mode == "PWM":
-                snippet = f"\npwm{gpio} = PWM(Pin({gpio}), freq=5000, duty=512)"
+                import_line = "from machine import Pin, PWM"
+                snippet = f"pwm{gpio} = PWM(Pin({gpio}), freq=5000, duty=512)"
             else: # "GPIO"
                 snippet = str(gpio)
                 
-            info_str += f"\n\n👉 Copié & Inséré :\n{snippet.replace(chr(10), ' | ')}"
+            info_str += f"\n\n👉 Copié & Inséré :\n{snippet}"
             
-            # Copy to Clipboard
+            # Copy to Clipboard (include import if present for standalone use)
+            full_snippet = f"{import_line}\n{snippet}" if import_line else snippet
             try:
-                copy_to_clipboard(snippet)
-            except Exception as ce:
-                # Fallback if workbench helper fails
-                self.clipboard_clear()
-                self.clipboard_append(snippet)
+                copy_to_clipboard(full_snippet)
+            except Exception:
+                try:
+                    self.clipboard_clear()
+                    self.clipboard_append(full_snippet)
+                except Exception:
+                    pass
             
             # Insert directly at the user's cursor in the active editor
             try:
@@ -338,11 +357,16 @@ class Esp32PinoutView(tk.Frame):
                 if editor:
                     code_view = editor.get_code_view()
                     if code_view:
-                        # Insert snippet followed by newline if it's multiple lines
-                        text_to_insert = snippet + "\n" if "\n" in snippet else snippet
-                        code_view.text.insert(tk.INSERT, text_to_insert)
-                        code_view.text.focus_set()
-            except Exception as ie:
+                        text_widget = code_view.text
+                        content = text_widget.get("1.0", "end")
+                        # Add required import at the top if not already present
+                        if import_line and import_line not in content and "from machine import" not in content:
+                            text_widget.insert("1.0", import_line + "\n\n")
+                        # Insert snippet followed by newline
+                        text_to_insert = snippet + "\n" if mode != "GPIO" else snippet
+                        text_widget.insert(tk.INSERT, text_to_insert)
+                        text_widget.focus_set()
+            except Exception:
                 pass
         else:
             info_str += "\n\n(Broche d'alimentation/masse - aucun code généré)"

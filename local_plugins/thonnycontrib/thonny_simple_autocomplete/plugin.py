@@ -9,12 +9,10 @@ def init_plugin():
     wb.set_option("edit.tab_complete_in_editor", False)
     wb.set_option("edit.tab_complete_in_shell", False)
     
-    wb.bind("WorkbenchReady", on_ready)
-    wb.bind("EditorTextCreated", on_editor_created)
-    print("Plugin Snippets & Autoclose Intelligent charge - DEBUG ENABLED")
+    wb.bind("WorkbenchReady", on_ready, True)
+    wb.bind("EditorTextCreated", on_editor_created, True)
 
 def on_ready(event):
-    print("thonny_simple_autocomplete: on_ready called")
     wb = get_workbench()
     editor_notebook = wb.get_editor_notebook()
     if editor_notebook:
@@ -25,7 +23,6 @@ def on_ready(event):
             disable_default_trigger(text_widget)
 
 def on_editor_created(event):
-    print("thonny_simple_autocomplete: on_editor_created called")
     bind_events(event.text_widget)
     disable_default_trigger(event.text_widget)
 
@@ -37,13 +34,10 @@ def disable_default_trigger(text_widget):
     try:
         # Prevent Thonny from launching its own completion popup
         text_widget.unbind("<Control-space>")
-        # Also try unbinding from the class level just in case, though risky if used by others
-        # text_widget.unbind_class("EditorText", "<Control-space>") 
     except Exception:
         pass
 
 def bind_events(text_widget):
-    print("thonny_simple_autocomplete: bind_events called")
     # --- 1. GESTION PRIORITAIRE (POUR BACKSPACE) ---
     # Thonny intercepte souvent BackSpace. Pour passer DEVANT lui, 
     # on ajoute un tag personnalisé en tout premier dans la liste des priorités.
@@ -123,9 +117,9 @@ def on_key_release_trigger(event):
         "print":   ("print()", 1),
         "input":   ("input()", 1),
         "randint": ("randint(,)", 2),
-        "numpy":   ("numpy import array ", 0),
-        "random":  ("random import randint ", 0),
-        "set":     ("setText()", 1)
+        "numpy":   ("from numpy import array", 0),
+        "random":  ("from random import randint", 0),
+        ".set":    (".setText()", 1),
     }
     
     sorted_keys = sorted(snippets.keys(), key=len, reverse=True)

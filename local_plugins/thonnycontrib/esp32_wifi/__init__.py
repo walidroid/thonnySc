@@ -151,17 +151,18 @@ class WifiWizardDialog(tk.Toplevel):
         get_workbench().bind("ProgramOutput", self.on_scan_output, True)
         get_workbench().bind("ToplevelResponse", self.on_scan_complete, True)
         
-        # Execute scanning script in backend
+        # Execute scanning script in backend with robust byte handling
         scan_code = (
             "import network; "
             "w = network.WLAN(network.STA_IF); "
             "w.active(True); "
-            "[print('SSID_FOUND:' + n[0].decode('utf-8')) for n in w.scan() if n[0]]"
+            "[print('SSID_FOUND:' + (n[0].decode('utf-8', 'ignore') if isinstance(n[0], (bytes, bytearray)) else str(n[0]))) for n in w.scan() if n[0]]"
         )
         get_runner().send_command(ToplevelCommand("execute_source", source=scan_code))
 
     def on_scan_output(self, event):
-        self.accumulated_scan_output += event.text
+        data = getattr(event, "data", getattr(event, "text", ""))
+        self.accumulated_scan_output += data
         while "\n" in self.accumulated_scan_output:
             line, self.accumulated_scan_output = self.accumulated_scan_output.split("\n", 1)
             line = line.strip()
@@ -222,16 +223,15 @@ class WifiWizardDialog(tk.Toplevel):
         get_workbench().bind("ProgramOutput", self.on_connect_output, True)
         get_workbench().bind("ToplevelResponse", self.on_connect_complete, True)
         
-        # Escape quotes
-        s_escaped = ssid.replace("'", "\\'")
-        p_escaped = password.replace("'", "\\'")
+        s_repr = repr(ssid)
+        p_repr = repr(password)
         
         connect_code = f"""
 import network
 import time
 w = network.WLAN(network.STA_IF)
 w.active(True)
-w.connect('{s_escaped}', '{p_escaped}')
+w.connect({s_repr}, {p_repr})
 connected = False
 for _ in range(10):
     if w.isconnected():
@@ -246,7 +246,8 @@ else:
         get_runner().send_command(ToplevelCommand("execute_source", source=connect_code))
 
     def on_connect_output(self, event):
-        self.accumulated_connect_output += event.text
+        data = getattr(event, "data", getattr(event, "text", ""))
+        self.accumulated_connect_output += data
         while "\n" in self.accumulated_connect_output:
             line, self.accumulated_connect_output = self.accumulated_connect_output.split("\n", 1)
             line = line.strip()
@@ -289,9 +290,8 @@ else:
         if not get_runner().ready_for_remote_file_operations(show_message=True):
             return
             
-        # Escape quotes
-        s_escaped = ssid.replace("'", "\\'")
-        p_escaped = password.replace("'", "\\'")
+        s_repr = repr(ssid)
+        p_repr = repr(password)
         
         wifi_code = f"""# Fichier de configuration Wi-Fi auto-généré
 def connect():
@@ -300,8 +300,8 @@ def connect():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     if not wlan.isconnected():
-        print("Connexion au reseau '{s_escaped}'...")
-        wlan.connect('{s_escaped}', '{p_escaped}')
+        print("Connexion au reseau " + {s_repr} + "...")
+        wlan.connect({s_repr}, {p_repr})
         for _ in range(10):
             if wlan.isconnected():
                 break
@@ -329,8 +329,9 @@ connect()
                 ),
                 dialog_title="Enregistrement"
             )
-            if "error" in write_res:
-                messagebox.showerror(tr("Erreur"), f"Impossible d'écrire wifi.py : {write_res['error']}")
+            if write_res is None or (isinstance(write_res, dict) and "error" in write_res):
+                err_msg = write_res.get("error", "Opération annulée") if isinstance(write_res, dict) else "Opération annulée"
+                messagebox.showerror(tr("Erreur"), f"Impossible d'écrire wifi.py : {err_msg}")
                 return
         except Exception as e:
             messagebox.showerror(tr("Erreur"), f"Erreur lors de la sauvegarde de wifi.py : {e}")
@@ -346,8 +347,8 @@ connect()
                 InlineCommand("read_file", path="boot.py", description="Lecture de boot.py"),
                 dialog_title="Lecture"
             )
-            if "content_bytes" in read_res:
-                boot_content = read_res["content_bytes"].decode("utf-8")
+            if read_res and "content_bytes" in read_res:
+                boot_content = read_res["content_bytes"].decode("utf-8", "ignore")
         except Exception:
             pass # File doesn't exist, which is fine, we'll write a new one
             
@@ -376,8 +377,9 @@ connect()
                     ),
                     dialog_title="Sauvegarde de boot.py"
                 )
-                if "error" in write_res:
-                    messagebox.showerror(tr("Erreur"), f"Impossible de modifier boot.py : {write_res['error']}")
+                if write_res is None or (isinstance(write_res, dict) and "error" in write_res):
+                    err_msg = write_res.get("error", "Opération annulée") if isinstance(write_res, dict) else "Opération annulée"
+                    messagebox.showerror(tr("Erreur"), f"Impossible de modifier boot.py : {err_msg}")
                     return
             except Exception as e:
                 messagebox.showerror(tr("Erreur"), f"Erreur lors de la modification de boot.py : {e}")
