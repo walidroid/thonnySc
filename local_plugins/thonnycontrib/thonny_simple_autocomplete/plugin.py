@@ -1,5 +1,9 @@
 from thonny import get_workbench
 import tkinter as tk
+import re
+
+IMPORT_LINE_PATTERN = re.compile(r'^\s*(?:from\s+[\w\.]+\s+import\b|import\b)')
+DEF_LINE_PATTERN = re.compile(r'^\s*def\s+')
 
 def init_plugin():
     wb = get_workbench()
@@ -125,25 +129,68 @@ def on_key_release_trigger(event):
     sorted_keys = sorted(snippets.keys(), key=len, reverse=True)
     
     match = None
+    delete_len = 0
+    replacement_content = None
+    replacement_back_step = 0
+
     for key in sorted_keys:
         if line_text.endswith(key):
-            # Vérification frontière (mot entier)
             start_index = len(line_text) - len(key)
-            if start_index > 0:
+            if not key.startswith(".") and start_index > 0:
                 char_before = line_text[start_index - 1]
                 if char_before.isalnum() or char_before == "_":
                     continue 
-            
+
+            prefix = line_text[:start_index]
+
+            # 1. Do not expand snippets if currently on an import line
+            # (e.g. 'from random import randint' should NOT turn into 'randint(,)'):
+            if IMPORT_LINE_PATTERN.match(prefix):
+                continue
+
+            # 2. Do not expand snippets when defining function names (e.g. 'def ...'):
+            if DEF_LINE_PATTERN.match(prefix):
+                continue
+
+            # 3. Handle 'numpy' and 'random' imports
+            if key in ("numpy", "random"):
+                prefix_stripped = prefix.strip()
+                if prefix_stripped == "from":
+                    # User typed 'from numpy' or 'from random'
+                    # Replace from 'from' onwards to avoid duplicate 'from from ...'
+                    leading_spaces = len(line_text) - len(line_text.lstrip())
+                    delete_len = len(line_text) - leading_spaces
+                    content, back_step = snippets[key]
+                    match = key
+                    replacement_content = content
+                    replacement_back_step = back_step
+                    break
+                elif prefix_stripped == "":
+                    # User typed 'numpy' or 'random' alone
+                    delete_len = len(key)
+                    content, back_step = snippets[key]
+                    match = key
+                    replacement_content = content
+                    replacement_back_step = back_step
+                    break
+                else:
+                    # In expressions, don't expand to import statement
+                    continue
+
+            # 4. Standard snippet
+            content, back_step = snippets[key]
             match = key
+            delete_len = len(key)
+            replacement_content = content
+            replacement_back_step = back_step
             break
             
     if match:
-        content, back_step = snippets[match]
-        start_delete = f"insert-{len(match)}c"
+        start_delete = f"insert-{delete_len}c"
         text.delete(start_delete, "insert")
-        text.insert("insert", content)
-        if back_step > 0:
-            text.mark_set("insert", f"insert-{back_step}c")
+        text.insert("insert", replacement_content)
+        if replacement_back_step > 0:
+            text.mark_set("insert", f"insert-{replacement_back_step}c")
 
 def on_key_press(event):
     """
