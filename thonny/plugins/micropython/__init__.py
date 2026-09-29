@@ -62,3 +62,13 @@ def load_plugin():
     get_workbench().set_default("SshMicroPython.make_uploaded_shebang_scripts_executable", True)
 
     get_workbench().set_default("esptool.show_advanced_options", False)
+
+
+def __getattr__(name):
+    import importlib
+    if name == "mp_front":
+        return importlib.import_module("thonny.plugins.micropython.mp_front")
+    mod = importlib.import_module("thonny.plugins.micropython.mp_front")
+    if hasattr(mod, name):
+        return getattr(mod, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
