@@ -63,18 +63,27 @@ class ESPFlashingDialog(BaseFlashingDialog):
 
     def get_instructions(self) -> Optional[str]:
         return (
-            f"Click the {get_menu_char()} button to see all features and options. If you're stuck then check the variant's\n"
-            f"'info' page for details or ask in {self.firmware_name} forum.\n\n"
-            "NB! Some boards need to be put into a special mode before they can be managed here\n"
-            "(e.g. by holding the BOOT button while plugging in). Some require hard reset after installing.\n\n"
-            f"You may need to tweak the install options ({get_menu_char()}) if the selected {self.firmware_name} variant doesn't match\n"
-            f"your device precisely. For example, you may need to set flash-mode to 'dio' or flash-size to 'detect'."
+            "Guide pour installer / configurer l'ESP32 :\n"
+            "1- Laisse ta carte branchée en USB.\n"
+            "2- Dans ton installateur, garde :\n"
+            "   MicroPython family: ESP32\n"
+            "   variant: Espressif • ESP32 / WROOM\n"
+            "   Target: COM5 (ou le port COM de ta carte)\n"
+            "   ☑ Erase all flash\n"
+            "3- Clique sur Installer.\n"
+            "4- Dès que la connexion commence, maintiens le bouton BOOT de l'ESP32 enfoncé.\n"
+            "5- Garde-le appuyé pendant quelques secondes.\n"
+            "6- Relâche BOOT lorsque l'installation commence réellement."
         )
 
     def populate_main_frame(self):
         super().populate_main_frame()
         self._target_info_label.grid_forget()
         self._target_info_content_label.grid_forget()
+
+        # Selectionner par defaut la famille esp32 si disponible
+        if "esp32" in self._family_combo.mapping.values():
+            self._family_combo.select_value("esp32")
 
         epadx = self.get_large_padding()
         ipadx = self.get_small_padding()
@@ -220,6 +229,12 @@ class ESPFlashingDialog(BaseFlashingDialog):
         super().on_change_family(family)
         if family:
             self._address_combo.select_value(self._compute_start_address(family))
+            # Pre-selectionner la variante ESP32 / WROOM si disponible
+            if family == "esp32" and self._variant_combo.mapping and not self._variant_combo.get_selected_value():
+                for desc, var in self._variant_combo.mapping.items():
+                    if var and "wroom" in desc.lower():
+                        self._variant_combo.select_value(var)
+                        break
 
     def compute_target_info_text_and_label(self, target: TargetInfo) -> Tuple[str, str]:
         return target.path, "info"
@@ -354,6 +369,8 @@ class ESPFlashingDialog(BaseFlashingDialog):
                 return False
 
         self.set_action_text(progress_text)
+        if self._work_mode == "install":
+            self.append_text(">> Conseil : Dès que la connexion commence, maintiens le bouton BOOT enfoncé quelques secondes puis relâche-le !\n\n")
         self.append_text(subprocess.list2cmdline(command) + "\n")
         self._proc = self._create_subprocess(command)
         try:

@@ -93,6 +93,47 @@ def open_esp32_flasher():
         mb.showerror("Erreur", f"Impossible d'ouvrir l'outil de flashage : {e}")
 
 
+def show_esp32_guide():
+    """Affiche le guide etape par etape pour configurer et flasher l'ESP32"""
+    wb = get_workbench()
+    lang = wb.get_option("general.language", "fr_FR") if wb else "fr_FR"
+    if lang.startswith("fr"):
+        msg = (
+            "Guide pour configurer et installer MicroPython sur ESP32 :\n\n"
+            "1- Laisse ta carte branchée en USB.\n"
+            "2- Dans ton installateur, garde :\n"
+            "   MicroPython family: ESP32\n"
+            "   variant: Espressif • ESP32 / WROOM\n"
+            "   Target: COM5 (ou le port COM de ta carte)\n"
+            "   ☑ Erase all flash\n"
+            "3- Clique sur Installer.\n"
+            "4- Dès que la connexion commence, maintiens le bouton BOOT de l'ESP32 enfoncé.\n"
+            "5- Garde-le appuyé pendant quelques secondes.\n"
+            "6- Relâche BOOT lorsque l'installation commence réellement.\n\n"
+            "Voulez-vous ouvrir l'installateur (esptool) maintenant ?"
+        )
+        title = "Guide de configuration ESP32"
+    else:
+        msg = (
+            "Steps to configure and install MicroPython on ESP32:\n\n"
+            "1- Keep your board connected via USB.\n"
+            "2- In your installer, keep:\n"
+            "   MicroPython family: ESP32\n"
+            "   variant: Espressif • ESP32 / WROOM\n"
+            "   Target: COM5 (or your detected COM port)\n"
+            "   ☑ Erase all flash\n"
+            "3- Click Install.\n"
+            "4- As soon as connection begins, press and hold the BOOT button on the ESP32.\n"
+            "5- Keep it pressed for a few seconds.\n"
+            "6- Release BOOT when the installation actually begins.\n\n"
+            "Would you like to open the installer (esptool) now?"
+        )
+        title = "ESP32 Configuration Guide"
+
+    if mb.askyesno(title, msg):
+        open_esp32_flasher()
+
+
 def get_menu_labels():
     wb = get_workbench()
     lang = wb.get_option("general.language", "fr_FR") if wb else "fr_FR"
@@ -104,6 +145,7 @@ def get_menu_labels():
             "config_interpreter": "Configurer l'interpréteur...",
             "config_esp32": "Configurer la carte ESP32...",
             "flash_esp32": "Flasher le firmware ESP32 (esptool)...",
+            "guide_esp32": "Guide de configuration ESP32 (BOOT)...",
         }
     else:
         return {
@@ -113,6 +155,7 @@ def get_menu_labels():
             "config_interpreter": "Configure interpreter...",
             "config_esp32": "Configure ESP32 board...",
             "flash_esp32": "Flash ESP32 firmware (esptool)...",
+            "guide_esp32": "ESP32 setup guide (BOOT button)...",
         }
 
 
@@ -177,6 +220,12 @@ def load_plugin():
                     command=open_esp32_flasher
                 )
 
+                # Guide d'aide pas-à-pas pour ESP32 (BOOT)
+                mode_menu.add_command(
+                    label=lbls["guide_esp32"],
+                    command=show_esp32_guide
+                )
+
             mode_menu.configure(postcommand=refresh_labels)
             main_menubar.add_cascade(label=labels["menu_title"], menu=mode_menu)
             
@@ -212,6 +261,13 @@ def load_plugin():
             lbls["flash_esp32"],
             open_esp32_flasher,
             group=77,
+        )
+        wb.add_command(
+            "guide_esp32_quick",
+            "tools",
+            lbls["guide_esp32"],
+            show_esp32_guide,
+            group=78,
         )
     except Exception:
         pass

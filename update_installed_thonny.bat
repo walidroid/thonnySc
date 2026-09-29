@@ -27,6 +27,7 @@ if not exist "%INSTALL_DIR%" (
 
 echo 1. Copie des correctifs MicroPython / ESP32...
 copy /y "thonny\plugins\micropython\base_flashing_dialog.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\base_flashing_dialog.py"
+copy /y "thonny\plugins\micropython\esptool_dialog.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\esptool_dialog.py"
 copy /y "thonny\plugins\micropython\__init__.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\__init__.py"
 
 echo 2. Copie du menu Interpreteur (thonny_quick_switch)...
