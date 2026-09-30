@@ -302,15 +302,30 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "PyInstaller build completed" -ForegroundColor Green
 
-# Post-Build: Copy local plugins to ensure they are present
+# Post-Build: Copy local plugins and fixes to ensure they are present in dist
 Write-Host "Copying local plugins to dist/Thonny..."
 if (Test-Path "local_plugins\thonnycontrib") {
-    $dest = "dist\Thonny\thonnycontrib"
-    if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest -Force | Out-Null }
-    Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest -Recurse -Force
-    Write-Host "Copied local plugins to $dest" -ForegroundColor Green
+    $dest1 = "dist\Thonny\thonnycontrib"
+    if (-not (Test-Path $dest1)) { New-Item -ItemType Directory -Path $dest1 -Force | Out-Null }
+    Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest1 -Recurse -Force
+
+    $dest2 = "dist\Thonny\_internal\thonnycontrib"
+    if (Test-Path "dist\Thonny\_internal") {
+        if (-not (Test-Path $dest2)) { New-Item -ItemType Directory -Path $dest2 -Force | Out-Null }
+        Copy-Item "local_plugins\thonnycontrib\*" -Destination $dest2 -Recurse -Force
+    }
+    Write-Host "Copied local plugins to dist" -ForegroundColor Green
 } else {
     Write-Host "Warning: local_plugins\thonnycontrib not found" -ForegroundColor Yellow
+}
+
+# Post-Build: Ensure micropython fixes are copied to dist
+$mpDest = "dist\Thonny\_internal\thonny\plugins\micropython"
+if (Test-Path $mpDest) {
+    Copy-Item "thonny\plugins\micropython\base_flashing_dialog.py" -Destination $mpDest -Force
+    Copy-Item "thonny\plugins\micropython\esptool_dialog.py" -Destination $mpDest -Force
+    Copy-Item "thonny\plugins\micropython\__init__.py" -Destination $mpDest -Force
+    Write-Host "Copied micropython fixes to $mpDest" -ForegroundColor Green
 }
 
 # Post-Build: Copy launch_thonny.py to dist (for Tcl/Tk auto-detection)

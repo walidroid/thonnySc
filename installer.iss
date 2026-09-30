@@ -38,6 +38,15 @@ Name: InstallESP32Driver; Description: "Installer les pilotes ESP32 (Optionnel)"
 Source: "dist\Thonny\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "Python\*"; DestDir: "{app}\Python"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+; Plugins ThonnySc personnalises (autocompletion, bascule interpreteur, soulignement erreurs, etc.)
+Source: "local_plugins\thonnycontrib\*"; DestDir: "{app}\thonnycontrib"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "local_plugins\thonnycontrib\*"; DestDir: "{app}\_internal\thonnycontrib"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Correctifs MicroPython & Flash ESP32
+Source: "thonny\plugins\micropython\base_flashing_dialog.py"; DestDir: "{app}\_internal\thonny\plugins\micropython"; Flags: ignoreversion
+Source: "thonny\plugins\micropython\esptool_dialog.py"; DestDir: "{app}\_internal\thonny\plugins\micropython"; Flags: ignoreversion
+Source: "thonny\plugins\micropython\__init__.py"; DestDir: "{app}\_internal\thonny\plugins\micropython"; Flags: ignoreversion
+
 ; Conditionally include Qt Designer if it exists (for local builds and CI with Qt Designer uploaded)
 #ifexist "Qt Designer\designer.exe"
 Source: "Qt Designer\*"; DestDir: "{app}\Qt Designer"; Flags: ignoreversion recursesubdirs createallsubdirs
