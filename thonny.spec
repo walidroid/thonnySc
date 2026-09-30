@@ -76,6 +76,7 @@ a = Analysis(
         'thonnycontrib.esp32_pinout',
         'thonnycontrib.esp32_wifi',
         'thonnycontrib.error_translator',
+        'thonnycontrib.thonny_error_highlighter',
         'pkg_resources.py2_warn',
         # Code completion
         'jedi',

@@ -46,6 +46,14 @@ if exist "%INSTALL_DIR%\_internal\thonnycontrib\thonny_simple_autocomplete" (
     copy /y "local_plugins\thonnycontrib\thonny_simple_autocomplete\*" "%INSTALL_DIR%\_internal\thonnycontrib\thonny_simple_autocomplete\"
 )
 
+echo 4. Copie du soulignement d'erreurs (thonny_error_highlighter)...
+if not exist "%INSTALL_DIR%\thonnycontrib\thonny_error_highlighter" mkdir "%INSTALL_DIR%\thonnycontrib\thonny_error_highlighter"
+copy /y "local_plugins\thonnycontrib\thonny_error_highlighter\*" "%INSTALL_DIR%\thonnycontrib\thonny_error_highlighter\"
+if exist "%INSTALL_DIR%\_internal\thonnycontrib" (
+    if not exist "%INSTALL_DIR%\_internal\thonnycontrib\thonny_error_highlighter" mkdir "%INSTALL_DIR%\_internal\thonnycontrib\thonny_error_highlighter"
+    copy /y "local_plugins\thonnycontrib\thonny_error_highlighter\*" "%INSTALL_DIR%\_internal\thonnycontrib\thonny_error_highlighter\"
+)
+
 echo.
 echo ========================================================
 echo Mise a jour effectuee avec succes !
