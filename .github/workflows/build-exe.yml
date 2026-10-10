@@ -312,13 +312,17 @@ jobs:
         }
 
         # Ensure workbench and zoom icons are copied to dist
-        $resDest = "dist\Thonny\_internal\thonny\res"
-        if (Test-Path $resDest) {
-            Copy-Item "thonny\workbench.py" -Destination "dist\Thonny\_internal\thonny\workbench.py" -Force
-            Copy-Item "thonny\res\equal*.png" -Destination $resDest -Force
-            Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
-            Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
-            Write-Host "✓ Copied workbench and zoom icons to $resDest"
+        $resDests = @("dist\Thonny\_internal\thonny\res", "dist\Thonny\thonny\res")
+        foreach ($resDest in $resDests) {
+            $parent = Split-Path $resDest -Parent
+            if (Test-Path $parent) {
+                if (-not (Test-Path $resDest)) { New-Item -ItemType Directory -Path $resDest -Force | Out-Null }
+                Copy-Item "thonny\res\*equal*.png" -Destination $resDest -Force
+                Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
+                Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
+                Copy-Item "thonny\workbench.py" -Destination (Join-Path $parent "workbench.py") -Force
+                Write-Host "✓ Copied workbench and zoom icons to $resDest"
+            }
         }
         
     - name: Install Inno Setup

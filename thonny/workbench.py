@@ -634,7 +634,7 @@ class Workbench(tk.Tk):
             tr("Default font size"),
             self._reset_font_size,
             default_sequence=select_sequence("<Control-0>", "<Command-0>"),
-            extra_sequences=["<Control-KP_0>", "<Control-equal>"],
+            extra_sequences=["<Control-KP_0>"],
             group=999,
             image="equal",
             caption=tr("Default zoom"),

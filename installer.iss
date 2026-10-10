@@ -49,9 +49,13 @@ Source: "thonny\plugins\micropython\__init__.py"; DestDir: "{app}\_internal\thon
 
 ; Interface Workbench & boutons Zoom (zoomin, equal, zoomout)
 Source: "thonny\workbench.py"; DestDir: "{app}\_internal\thonny"; Flags: ignoreversion
-Source: "thonny\res\equal*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\workbench.py"; DestDir: "{app}\thonny"; Flags: ignoreversion
+Source: "thonny\res\*equal*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\res\*equal*.png"; DestDir: "{app}\thonny\res"; Flags: ignoreversion
 Source: "thonny\res\zoomin*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\res\zoomin*.png"; DestDir: "{app}\thonny\res"; Flags: ignoreversion
 Source: "thonny\res\zoomout*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\res\zoomout*.png"; DestDir: "{app}\thonny\res"; Flags: ignoreversion
 Source: "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo"; DestDir: "{app}\_internal\thonny\locale\fr_FR\LC_MESSAGES"; Flags: ignoreversion
 Source: "buttons\*"; DestDir: "{app}\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "buttons\*"; DestDir: "{app}\_internal\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs

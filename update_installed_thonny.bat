@@ -18,17 +18,28 @@ echo Mise a jour des fichiers ThonnySc dans Program Files...
 echo ========================================================
 
 set "INSTALL_DIR=C:\Program Files (x86)\ThonnySc"
-
 if not exist "%INSTALL_DIR%" (
-    echo [ERREUR] Dossier introuvable : %INSTALL_DIR%
-    pause
-    exit /b 1
+    if exist "C:\Program Files\ThonnySc" (
+        set "INSTALL_DIR=C:\Program Files\ThonnySc"
+    ) else (
+        echo [ERREUR] Dossier ThonnySc introuvable dans C:\Program Files (x86)\ThonnySc ni dans C:\Program Files\ThonnySc
+        pause
+        exit /b 1
+    )
 )
 
+echo Dossier cible detecte : %INSTALL_DIR%
+
 echo 1. Copie des correctifs MicroPython / ESP32...
+if not exist "%INSTALL_DIR%\_internal\thonny\plugins\micropython" mkdir "%INSTALL_DIR%\_internal\thonny\plugins\micropython"
 copy /y "thonny\plugins\micropython\base_flashing_dialog.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\base_flashing_dialog.py"
 copy /y "thonny\plugins\micropython\esptool_dialog.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\esptool_dialog.py"
 copy /y "thonny\plugins\micropython\__init__.py" "%INSTALL_DIR%\_internal\thonny\plugins\micropython\__init__.py"
+if exist "%INSTALL_DIR%\thonny\plugins\micropython" (
+    copy /y "thonny\plugins\micropython\base_flashing_dialog.py" "%INSTALL_DIR%\thonny\plugins\micropython\base_flashing_dialog.py"
+    copy /y "thonny\plugins\micropython\esptool_dialog.py" "%INSTALL_DIR%\thonny\plugins\micropython\esptool_dialog.py"
+    copy /y "thonny\plugins\micropython\__init__.py" "%INSTALL_DIR%\thonny\plugins\micropython\__init__.py"
+)
 
 echo 2. Copie du menu Interpreteur (thonny_quick_switch)...
 if exist "%INSTALL_DIR%\thonnycontrib\thonny_quick_switch" (
@@ -56,10 +67,16 @@ if exist "%INSTALL_DIR%\_internal\thonnycontrib" (
 
 echo 5. Copie de workbench et des boutons de zoom (equal.png, zoomin, zoomout)...
 copy /y "thonny\workbench.py" "%INSTALL_DIR%\_internal\thonny\workbench.py"
+if exist "%INSTALL_DIR%\thonny" copy /y "thonny\workbench.py" "%INSTALL_DIR%\thonny\workbench.py"
 if not exist "%INSTALL_DIR%\_internal\thonny\res" mkdir "%INSTALL_DIR%\_internal\thonny\res"
-copy /y "thonny\res\equal*.png" "%INSTALL_DIR%\_internal\thonny\res\"
+copy /y "thonny\res\*equal*.png" "%INSTALL_DIR%\_internal\thonny\res\"
 copy /y "thonny\res\zoomin*.png" "%INSTALL_DIR%\_internal\thonny\res\"
 copy /y "thonny\res\zoomout*.png" "%INSTALL_DIR%\_internal\thonny\res\"
+if exist "%INSTALL_DIR%\thonny\res" (
+    copy /y "thonny\res\*equal*.png" "%INSTALL_DIR%\thonny\res\"
+    copy /y "thonny\res\zoomin*.png" "%INSTALL_DIR%\thonny\res\"
+    copy /y "thonny\res\zoomout*.png" "%INSTALL_DIR%\thonny\res\"
+)
 if exist "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES" (
     copy /y "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo" "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES\"
 )

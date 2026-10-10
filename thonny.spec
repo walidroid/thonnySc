@@ -51,7 +51,7 @@ esp_hiddenimports = collect_submodules('thonny.plugins.esp')
 
 a = Analysis(
     ['thonny/__main__.py'],
-    pathex=[],
+    pathex=[os.path.abspath('.')],
     binaries=[],
     datas=[
         ('thonny', 'thonny'),

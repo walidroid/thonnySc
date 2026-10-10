@@ -278,18 +278,18 @@ if (Test-Path $venvPython) {
     & $venvPython -m pip install pyinstaller --no-warn-script-location
     Write-Host "Running PyInstaller..."
     & $venvPython -m PyInstaller thonny.spec
-} elseif (Get-Command "py" -ErrorAction SilentlyContinue) {
-    Write-Host "Using 'py' launcher..."
-    py -3 -m pip install -r requirements.txt --no-warn-script-location
-    py -3 -m pip install pyinstaller --no-warn-script-location
-    Write-Host "Running PyInstaller..."
-    py -3 -m PyInstaller thonny.spec
 } elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
     Write-Host "Using 'python' command..."
     python -m pip install -r requirements.txt --no-warn-script-location
     python -m pip install pyinstaller --no-warn-script-location
     Write-Host "Running PyInstaller..."
     python -m PyInstaller thonny.spec
+} elseif (Get-Command "py" -ErrorAction SilentlyContinue) {
+    Write-Host "Using 'py' launcher..."
+    py -3 -m pip install -r requirements.txt --no-warn-script-location
+    py -3 -m pip install pyinstaller --no-warn-script-location
+    Write-Host "Running PyInstaller..."
+    py -3 -m PyInstaller thonny.spec
 } else {
     Write-Host "CRITICAL WARNING: Python not found. PyInstaller might fail or use wrong environment!" -ForegroundColor Red
     # Fallback to direct command if it exists
@@ -320,22 +320,29 @@ if (Test-Path "local_plugins\thonnycontrib") {
 }
 
 # Post-Build: Ensure micropython fixes are copied to dist
-$mpDest = "dist\Thonny\_internal\thonny\plugins\micropython"
-if (Test-Path $mpDest) {
-    Copy-Item "thonny\plugins\micropython\base_flashing_dialog.py" -Destination $mpDest -Force
-    Copy-Item "thonny\plugins\micropython\esptool_dialog.py" -Destination $mpDest -Force
-    Copy-Item "thonny\plugins\micropython\__init__.py" -Destination $mpDest -Force
-    Write-Host "Copied micropython fixes to $mpDest" -ForegroundColor Green
+$mpDests = @("dist\Thonny\_internal\thonny\plugins\micropython", "dist\Thonny\thonny\plugins\micropython")
+foreach ($mpDest in $mpDests) {
+    if (Test-Path (Split-Path $mpDest -Parent)) {
+        if (-not (Test-Path $mpDest)) { New-Item -ItemType Directory -Path $mpDest -Force | Out-Null }
+        Copy-Item "thonny\plugins\micropython\base_flashing_dialog.py" -Destination $mpDest -Force
+        Copy-Item "thonny\plugins\micropython\esptool_dialog.py" -Destination $mpDest -Force
+        Copy-Item "thonny\plugins\micropython\__init__.py" -Destination $mpDest -Force
+        Write-Host "Copied micropython fixes to $mpDest" -ForegroundColor Green
+    }
 }
 
 # Post-Build: Ensure workbench and zoom icons are copied to dist
-$resDest = "dist\Thonny\_internal\thonny\res"
-if (Test-Path $resDest) {
-    Copy-Item "thonny\workbench.py" -Destination "dist\Thonny\_internal\thonny\workbench.py" -Force
-    Copy-Item "thonny\res\equal*.png" -Destination $resDest -Force
-    Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
-    Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
-    Write-Host "Copied workbench and zoom icons to $resDest" -ForegroundColor Green
+$resDests = @("dist\Thonny\_internal\thonny\res", "dist\Thonny\thonny\res")
+foreach ($resDest in $resDests) {
+    $parent = Split-Path $resDest -Parent
+    if (Test-Path $parent) {
+        if (-not (Test-Path $resDest)) { New-Item -ItemType Directory -Path $resDest -Force | Out-Null }
+        Copy-Item "thonny\res\*equal*.png" -Destination $resDest -Force
+        Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
+        Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
+        Copy-Item "thonny\workbench.py" -Destination (Join-Path $parent "workbench.py") -Force
+        Write-Host "Copied workbench and zoom icons to $resDest" -ForegroundColor Green
+    }
 }
 
 # Post-Build: Copy launch_thonny.py to dist (for Tcl/Tk auto-detection)
