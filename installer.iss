@@ -47,6 +47,15 @@ Source: "thonny\plugins\micropython\base_flashing_dialog.py"; DestDir: "{app}\_i
 Source: "thonny\plugins\micropython\esptool_dialog.py"; DestDir: "{app}\_internal\thonny\plugins\micropython"; Flags: ignoreversion
 Source: "thonny\plugins\micropython\__init__.py"; DestDir: "{app}\_internal\thonny\plugins\micropython"; Flags: ignoreversion
 
+; Interface Workbench & boutons Zoom (zoomin, equal, zoomout)
+Source: "thonny\workbench.py"; DestDir: "{app}\_internal\thonny"; Flags: ignoreversion
+Source: "thonny\res\equal*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\res\zoomin*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\res\zoomout*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
+Source: "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo"; DestDir: "{app}\_internal\thonny\locale\fr_FR\LC_MESSAGES"; Flags: ignoreversion
+Source: "buttons\*"; DestDir: "{app}\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "buttons\*"; DestDir: "{app}\_internal\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs
+
 ; Conditionally include Qt Designer if it exists (for local builds and CI with Qt Designer uploaded)
 #ifexist "Qt Designer\designer.exe"
 Source: "Qt Designer\*"; DestDir: "{app}\Qt Designer"; Flags: ignoreversion recursesubdirs createallsubdirs

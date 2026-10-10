@@ -1983,3 +1983,19 @@ msgstr "Avertir si un module personnalisé rend un module de bibliothèque inacc
 msgid "Search micropython-lib and PyPI"
 msgstr "Chercher micropython-lib et PyPI"
 
+#: thonny/workbench.py:627
+msgid "Zoom in"
+msgstr "Zoom avant"
+
+#: thonny/workbench.py:633
+msgid "Default font size"
+msgstr "Taille de police par défaut"
+
+#: thonny/workbench.py:639
+msgid "Default zoom"
+msgstr "Zoom par défaut"
+
+#: thonny/workbench.py:645
+msgid "Zoom out"
+msgstr "Zoom arrière"
+

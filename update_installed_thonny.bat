@@ -54,6 +54,20 @@ if exist "%INSTALL_DIR%\_internal\thonnycontrib" (
     copy /y "local_plugins\thonnycontrib\thonny_error_highlighter\*" "%INSTALL_DIR%\_internal\thonnycontrib\thonny_error_highlighter\"
 )
 
+echo 5. Copie de workbench et des boutons de zoom (equal.png, zoomin, zoomout)...
+copy /y "thonny\workbench.py" "%INSTALL_DIR%\_internal\thonny\workbench.py"
+if not exist "%INSTALL_DIR%\_internal\thonny\res" mkdir "%INSTALL_DIR%\_internal\thonny\res"
+copy /y "thonny\res\equal*.png" "%INSTALL_DIR%\_internal\thonny\res\"
+copy /y "thonny\res\zoomin*.png" "%INSTALL_DIR%\_internal\thonny\res\"
+copy /y "thonny\res\zoomout*.png" "%INSTALL_DIR%\_internal\thonny\res\"
+if exist "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES" (
+    copy /y "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo" "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES\"
+)
+if not exist "%INSTALL_DIR%\buttons" mkdir "%INSTALL_DIR%\buttons"
+copy /y "buttons\*" "%INSTALL_DIR%\buttons\"
+if not exist "%INSTALL_DIR%\_internal\buttons" mkdir "%INSTALL_DIR%\_internal\buttons"
+copy /y "buttons\*" "%INSTALL_DIR%\_internal\buttons\"
+
 echo.
 echo ========================================================
 echo Mise a jour effectuee avec succes !
@@ -61,3 +75,4 @@ echo Vous pouvez maintenant relancer ThonnySc.
 echo ========================================================
 echo.
 pause
+

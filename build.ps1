@@ -328,6 +328,16 @@ if (Test-Path $mpDest) {
     Write-Host "Copied micropython fixes to $mpDest" -ForegroundColor Green
 }
 
+# Post-Build: Ensure workbench and zoom icons are copied to dist
+$resDest = "dist\Thonny\_internal\thonny\res"
+if (Test-Path $resDest) {
+    Copy-Item "thonny\workbench.py" -Destination "dist\Thonny\_internal\thonny\workbench.py" -Force
+    Copy-Item "thonny\res\equal*.png" -Destination $resDest -Force
+    Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
+    Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
+    Write-Host "Copied workbench and zoom icons to $resDest" -ForegroundColor Green
+}
+
 # Post-Build: Copy launch_thonny.py to dist (for Tcl/Tk auto-detection)
 if (Test-Path "launch_thonny.py") {
     Copy-Item "launch_thonny.py" -Destination "dist\Thonny\launch_thonny.py" -Force

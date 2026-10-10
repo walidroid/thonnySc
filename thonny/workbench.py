@@ -629,6 +629,19 @@ class Workbench(tk.Tk):
         )
 
         self.add_command(
+            "reset_font_size",
+            "view",
+            tr("Default font size"),
+            self._reset_font_size,
+            default_sequence=select_sequence("<Control-0>", "<Command-0>"),
+            extra_sequences=["<Control-KP_0>", "<Control-equal>"],
+            group=999,
+            image="equal",
+            caption=tr("Default zoom"),
+            include_in_toolbar=True,
+        )
+
+        self.add_command(
             "decrease_font_size",
             "view",
             tr("Decrease font size"),
@@ -2172,6 +2185,24 @@ class Workbench(tk.Tk):
             io_font_size += delta
             self.set_option("view.io_font_size", self._guard_font_size(io_font_size))
             self.update_fonts()
+
+    def _reset_font_size(self) -> None:
+        if running_on_mac_os():
+            default_editor_size, default_io_size = 14, 12
+        elif self.in_simple_mode():
+            default_editor_size, default_io_size = 12, 12
+        else:
+            default_editor_size, default_io_size = 13, 11
+
+        default_editor_size = self._configuration_manager._defaults.get(
+            "view.editor_font_size", default_editor_size
+        )
+        default_io_size = self._configuration_manager._defaults.get(
+            "view.io_font_size", default_io_size
+        )
+        self.set_option("view.editor_font_size", self._guard_font_size(default_editor_size))
+        self.set_option("view.io_font_size", self._guard_font_size(default_io_size))
+        self.update_fonts()
 
     def _guard_font_size(self, size: int) -> int:
         # https://bitbucket.org/plas/thonny/issues/164/negative-font-size-crashes-thonny

@@ -310,6 +310,16 @@ jobs:
             Copy-Item "thonny\plugins\micropython\__init__.py" -Destination $mpDest -Force
             Write-Host "✓ Copied micropython fixes to $mpDest"
         }
+
+        # Ensure workbench and zoom icons are copied to dist
+        $resDest = "dist\Thonny\_internal\thonny\res"
+        if (Test-Path $resDest) {
+            Copy-Item "thonny\workbench.py" -Destination "dist\Thonny\_internal\thonny\workbench.py" -Force
+            Copy-Item "thonny\res\equal*.png" -Destination $resDest -Force
+            Copy-Item "thonny\res\zoomin*.png" -Destination $resDest -Force
+            Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
+            Write-Host "✓ Copied workbench and zoom icons to $resDest"
+        }
         
     - name: Install Inno Setup
       run: |
