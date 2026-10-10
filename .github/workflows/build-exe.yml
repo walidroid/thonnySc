@@ -324,6 +324,18 @@ jobs:
                 Write-Host "✓ Copied workbench and zoom icons to $resDest"
             }
         }
+
+        # Ensure languages.py and locale files are copied to dist
+        $localeDests = @("dist\Thonny\_internal\thonny\locale", "dist\Thonny\thonny\locale")
+        foreach ($locDest in $localeDests) {
+            $parent = Split-Path $locDest -Parent
+            if (Test-Path $parent) {
+                if (-not (Test-Path $locDest)) { New-Item -ItemType Directory -Path $locDest -Force | Out-Null }
+                Copy-Item "thonny\locale\*" -Destination $locDest -Recurse -Force
+                Copy-Item "thonny\languages.py" -Destination (Join-Path $parent "languages.py") -Force
+                Write-Host "✓ Copied languages.py and locale files to $locDest"
+            }
+        }
         
     - name: Install Inno Setup
       run: |

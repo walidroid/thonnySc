@@ -42,11 +42,44 @@ def tr(message: str) -> str:
     return _translation.gettext(message)
 
 
+class ThonnyGNUTranslations(gettext.GNUTranslations):
+    def __init__(self, fp=None):
+        self._charset = "utf-8"
+        super().__init__(fp)
+
+
 def set_language(language_code: str) -> None:
     global _translation
+    import sys
+
+    candidate_paths = [
+        os.path.join(os.path.dirname(__file__), "locale"),
+    ]
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            candidate_paths.append(os.path.join(sys._MEIPASS, "thonny", "locale"))
+            candidate_paths.append(os.path.join(sys._MEIPASS, "locale"))
+        exe_dir = os.path.dirname(sys.executable)
+        candidate_paths.append(os.path.join(exe_dir, "_internal", "thonny", "locale"))
+        candidate_paths.append(os.path.join(exe_dir, "thonny", "locale"))
+
+    for path in candidate_paths:
+        mo_file = os.path.join(path, language_code, "LC_MESSAGES", "thonny.mo")
+        if os.path.isfile(mo_file):
+            try:
+                _translation = gettext.translation(
+                    "thonny", path, [language_code], class_=ThonnyGNUTranslations
+                )
+                logger.info("Loaded language '%s' from %s", language_code, mo_file)
+                return
+            except Exception as e:
+                logger.exception("Could not set language to '%s' from %s", language_code, mo_file, exc_info=e)
+
     try:
         path = os.path.join(os.path.dirname(__file__), "locale")
-        _translation = gettext.translation("thonny", path, [language_code])
+        _translation = gettext.translation(
+            "thonny", path, [language_code], class_=ThonnyGNUTranslations
+        )
     except Exception as e:
-        logger.exception("Could not set language to '%s", language_code, exc_info=e)
+        logger.exception("Could not set language to '%s'", language_code, exc_info=e)
         _translation = gettext.NullTranslations()

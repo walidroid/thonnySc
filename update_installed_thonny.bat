@@ -77,8 +77,14 @@ if exist "%INSTALL_DIR%\thonny\res" (
     copy /y "thonny\res\zoomin*.png" "%INSTALL_DIR%\thonny\res\"
     copy /y "thonny\res\zoomout*.png" "%INSTALL_DIR%\thonny\res\"
 )
-if exist "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES" (
-    copy /y "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo" "%INSTALL_DIR%\_internal\thonny\locale\fr_FR\LC_MESSAGES\"
+echo 6. Copie de languages.py et des fichiers de langue (fr_FR, en_US)...
+copy /y "thonny\languages.py" "%INSTALL_DIR%\_internal\thonny\languages.py"
+if exist "%INSTALL_DIR%\thonny" copy /y "thonny\languages.py" "%INSTALL_DIR%\thonny\languages.py"
+if not exist "%INSTALL_DIR%\_internal\thonny\locale" mkdir "%INSTALL_DIR%\_internal\thonny\locale"
+xcopy /y /e /i "thonny\locale\*" "%INSTALL_DIR%\_internal\thonny\locale\"
+if exist "%INSTALL_DIR%\thonny" (
+    if not exist "%INSTALL_DIR%\thonny\locale" mkdir "%INSTALL_DIR%\thonny\locale"
+    xcopy /y /e /i "thonny\locale\*" "%INSTALL_DIR%\thonny\locale\"
 )
 if not exist "%INSTALL_DIR%\buttons" mkdir "%INSTALL_DIR%\buttons"
 copy /y "buttons\*" "%INSTALL_DIR%\buttons\"

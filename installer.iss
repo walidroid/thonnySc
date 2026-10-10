@@ -56,7 +56,10 @@ Source: "thonny\res\zoomin*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: 
 Source: "thonny\res\zoomin*.png"; DestDir: "{app}\thonny\res"; Flags: ignoreversion
 Source: "thonny\res\zoomout*.png"; DestDir: "{app}\_internal\thonny\res"; Flags: ignoreversion
 Source: "thonny\res\zoomout*.png"; DestDir: "{app}\thonny\res"; Flags: ignoreversion
-Source: "thonny\locale\fr_FR\LC_MESSAGES\thonny.mo"; DestDir: "{app}\_internal\thonny\locale\fr_FR\LC_MESSAGES"; Flags: ignoreversion
+Source: "thonny\languages.py"; DestDir: "{app}\_internal\thonny"; Flags: ignoreversion
+Source: "thonny\languages.py"; DestDir: "{app}\thonny"; Flags: ignoreversion
+Source: "thonny\locale\*"; DestDir: "{app}\_internal\thonny\locale"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "thonny\locale\*"; DestDir: "{app}\thonny\locale"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "buttons\*"; DestDir: "{app}\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "buttons\*"; DestDir: "{app}\_internal\buttons"; Flags: ignoreversion recursesubdirs createallsubdirs
 

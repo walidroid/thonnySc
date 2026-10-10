@@ -265,6 +265,17 @@ if (Test-Path $localeDir) {
     Write-Host "Locale cleanup complete" -ForegroundColor Green
 }
 
+# Step 2.9: Compile .po translation catalogs to .mo
+Write-Host "`n[2.9/5] Compiling translation files (.po -> .mo)..." -ForegroundColor Cyan
+if (Test-Path "tools\msgfmt.py") {
+    if (Test-Path "Python\python.exe") {
+        & ".\Python\python.exe" "tools\msgfmt.py"
+    } elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
+        python "tools\msgfmt.py"
+    }
+    Write-Host "Translation files compiled successfully" -ForegroundColor Green
+}
+
 # Step 3: Build with PyInstaller
 Write-Host "`n[3/5] Building with PyInstaller..." -ForegroundColor Cyan
 
@@ -342,6 +353,18 @@ foreach ($resDest in $resDests) {
         Copy-Item "thonny\res\zoomout*.png" -Destination $resDest -Force
         Copy-Item "thonny\workbench.py" -Destination (Join-Path $parent "workbench.py") -Force
         Write-Host "Copied workbench and zoom icons to $resDest" -ForegroundColor Green
+    }
+}
+
+# Post-Build: Ensure languages.py and locale files are copied to dist
+$localeDests = @("dist\Thonny\_internal\thonny\locale", "dist\Thonny\thonny\locale")
+foreach ($locDest in $localeDests) {
+    $parent = Split-Path $locDest -Parent
+    if (Test-Path $parent) {
+        if (-not (Test-Path $locDest)) { New-Item -ItemType Directory -Path $locDest -Force | Out-Null }
+        Copy-Item "thonny\locale\*" -Destination $locDest -Recurse -Force
+        Copy-Item "thonny\languages.py" -Destination (Join-Path $parent "languages.py") -Force
+        Write-Host "Copied languages.py and locale files to $locDest" -ForegroundColor Green
     }
 }
 
